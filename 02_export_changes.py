@@ -327,14 +327,28 @@ def main():
                             wait_download(download_file, attachment_folder / "attachments_all.zip")
                             print("Attachments downloaded")
 
-                            # ปิด dialog
+                            # ปิด dialog ด้วยปุ่ม Close
                             print("[DEBUG] Closing Attachments dialog...")
-                            page.keyboard.press("Escape")
+                            close_btn = page.locator('button#attachment_closemodal').first
+                            if close_btn.count() == 0:
+                                close_btn = frame.locator('button#attachment_closemodal').first
+                            if close_btn.count() > 0:
+                                close_btn.click()
+                            else:
+                                # fallback: ใช้ ESC ถ้าหาปุ่มไม่เจอ
+                                page.keyboard.press("Escape")
                             frame.wait_for_timeout(500)
                         else:
                             print("[INFO] No attachments or Download All button not found - closing dialog")
-                            # ปิด dialog และไปขั้นตอนถัดไป
-                            page.keyboard.press("Escape")
+                            # ปิด dialog ด้วยปุ่ม Close
+                            close_btn = page.locator('button#attachment_closemodal').first
+                            if close_btn.count() == 0:
+                                close_btn = frame.locator('button#attachment_closemodal').first
+                            if close_btn.count() > 0:
+                                close_btn.click()
+                            else:
+                                # fallback: ใช้ ESC ถ้าหาปุ่มไม่เจอ
+                                page.keyboard.press("Escape")
                             frame.wait_for_timeout(500)
                     else:
                         print("[INFO] No attachments button found (may not have attachments)")
