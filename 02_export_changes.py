@@ -296,70 +296,45 @@ def main():
                         # รอให้ Attachments dialog popup ขึ้นมา
                         frame.wait_for_timeout(2000)
 
-                        # ตรวจสอบว่ามีข้อความ "There are no attachments" หรือไม่
-                        no_attachments_msg = frame.locator('text=There are no attachments').first
-                        if no_attachments_msg.count() == 0:
-                            no_attachments_msg = page.locator('text=There are no attachments').first
+                        # หาปุ่ม Download All โดยตรง แทนที่จะตรวจสอบข้อความ
+                        print("[DEBUG] Looking for Download All button...")
 
-                        if no_attachments_msg.count() > 0:
-                            print("No attachments found")
-                            # ปิด dialog ด้วยปุ่ม Close
-                            close_btn = frame.locator('button#attachment_closemodal').first
-                            if close_btn.count() == 0:
-                                # fallback: หาด้วย data-dismiss และ class
-                                close_btn = frame.locator('button[data-dismiss="GlideModal"].close').first
+                        # ลองหาใน page หลักก่อน (modal อาจจะอยู่นอก frame)
+                        download_all_btn = page.locator('input#download_all_button').first
+                        if download_all_btn.count() > 0:
+                            print("[DEBUG] Found Download All button in page context")
+                        else:
+                            # ลองหาใน frame
+                            download_all_btn = frame.locator('input#download_all_button').first
+                            if download_all_btn.count() > 0:
+                                print("[DEBUG] Found Download All button in frame context")
 
-                            if close_btn.count() == 0:
-                                # ลองหาใน page หลัก
-                                close_btn = page.locator('button#attachment_closemodal').first
+                        if download_all_btn.count() == 0:
+                            # fallback: หาด้วย onclick
+                            download_all_btn = page.locator('input[onclick*="downloadAllAttachments"]').first
+                            if download_all_btn.count() > 0:
+                                print("[DEBUG] Found Download All button by onclick attribute")
 
-                            if close_btn.count() > 0:
-                                close_btn.click()
-                            else:
-                                # fallback: ใช้ ESC ถ้าหาปุ่มไม่เจอ
-                                page.keyboard.press("Escape")
+                        if download_all_btn.count() > 0:
+                            # สร้างโฟลเดอร์ Attachment
+                            attachment_folder = folder / "Attachment"
+                            attachment_folder.mkdir(parents=True, exist_ok=True)
 
+                            print("Downloading all attachments...")
+                            with page.expect_download() as dl:
+                                download_all_btn.click()
+                            download_file = dl.value
+                            wait_download(download_file, attachment_folder / "attachments_all.zip")
+                            print("Attachments downloaded")
+
+                            # ปิด dialog
+                            page.keyboard.press("Escape")
                             frame.wait_for_timeout(500)
                         else:
-                            # มี attachments - หาปุ่ม "Download All"
-                            print("[DEBUG] Looking for Download All button...")
-
-                            # ลองหาใน page หลักก่อน (modal อาจจะอยู่นอก frame)
-                            download_all_btn = page.locator('input#download_all_button').first
-                            if download_all_btn.count() > 0:
-                                print("[DEBUG] Found Download All button in page context")
-                            else:
-                                # ลองหาใน frame
-                                download_all_btn = frame.locator('input#download_all_button').first
-                                if download_all_btn.count() > 0:
-                                    print("[DEBUG] Found Download All button in frame context")
-
-                            if download_all_btn.count() == 0:
-                                # fallback: หาด้วย onclick
-                                download_all_btn = page.locator('input[onclick*="downloadAllAttachments"]').first
-                                if download_all_btn.count() > 0:
-                                    print("[DEBUG] Found Download All button by onclick attribute")
-
-                            if download_all_btn.count() > 0:
-                                # สร้างโฟลเดอร์ Attachment
-                                attachment_folder = folder / "Attachment"
-                                attachment_folder.mkdir(parents=True, exist_ok=True)
-
-                                print("Downloading all attachments...")
-                                with page.expect_download() as dl:
-                                    download_all_btn.click()
-                                download_file = dl.value
-                                wait_download(download_file, attachment_folder / "attachments_all.zip")
-                                print("Attachments downloaded")
-
-                                # ปิด dialog
-                                page.keyboard.press("Escape")
-                                frame.wait_for_timeout(500)
-                            else:
-                                print("[WARN] Download All button not found in Attachments dialog")
-                                # ปิด dialog
-                                page.keyboard.press("Escape")
-                                frame.wait_for_timeout(500)
+                            print("[WARN] Download All button not found in Attachments dialog")
+                            # ปิด dialog
+                            page.keyboard.press("Escape")
+                            frame.wait_for_timeout(500)
                     else:
                         print("[INFO] No attachments button found (may not have attachments)")
 
