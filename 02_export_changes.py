@@ -117,11 +117,23 @@ def main():
 
                 # เปิด record ในแท็บเดิม
                 link.click()
+
+                # รายการแรกอาจจะต้องรอนานกว่า (session initialization)
+                if i == 0 and page_number == 1:
+                    print("First record - waiting extra time for page to stabilize...")
+                    page.wait_for_timeout(5000)
+                else:
+                    page.wait_for_timeout(2000)
+
                 # หลังคลิกเข้า record หน้า form มักอยู่ใน gsft_main เหมือนเดิม
                 frame = page.frame(name="gsft_main") or page
 
                 # รอ form มา
-                frame.wait_for_selector("form", timeout=60_000)
+                try:
+                    frame.wait_for_selector("form", timeout=60_000)
+                except Exception as e:
+                    print(f"[WARN] Form not found, trying to continue anyway. Error: {e}")
+                    page.wait_for_timeout(3000)
 
                 # ---------- (A) Export PDF ผ่าน UI ----------
                 # Step 1-5: Additional actions -> Export -> PDF -> Export -> Download
