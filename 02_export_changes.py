@@ -139,6 +139,82 @@ def main():
             except Exception as e:
                 print(f"[WARN] Export PDF failed: {e}")
 
+            # ---------- (D) Download UAT Signoff from Supporting Documents ----------
+            try:
+                # คลิกแท็บ "Supporting Documents"
+                supporting_docs_tab = frame.locator('span.tab_caption_text:has-text("Supporting Documents")').first
+                if supporting_docs_tab.count() > 0:
+                    supporting_docs_tab.click()
+                    frame.wait_for_timeout(1500)
+                    print("Opened Supporting Documents tab")
+
+                    # หา UAT Signoff attachment field
+                    uat_input = frame.locator('input#attachment\\.change_request\\.u_file_attachment_2[type="hidden"]').first
+
+                    if uat_input.count() > 0:
+                        # ได้ sys_id ของ attachment
+                        sys_id = uat_input.get_attribute("value")
+
+                        if sys_id and sys_id.strip():
+                            print(f"Found UAT Signoff attachment (sys_id: {sys_id})")
+
+                            # สร้างโฟลเดอร์ UAT Signoff
+                            uat_folder = folder / "UAT Signoff"
+                            uat_folder.mkdir(parents=True, exist_ok=True)
+
+                            # ดาวน์โหลดโดยใช้ sys_id
+                            # วิธีที่ 1: หา download link จาก attachment field
+                            attachment_row = uat_input.locator("xpath=ancestor::tr[1]").first
+                            if attachment_row.count() > 0:
+                                # หา paperclip icon หรือ attachment link
+                                attachment_link = attachment_row.locator('a[href*="sys_attachment"], span.icon-paperclip, a.list_edit_attachment').first
+
+                                if attachment_link.count() > 0:
+                                    attachment_link.click()
+                                    frame.wait_for_timeout(1000)
+
+                                    # หาปุ่ม Download All หรือไฟล์แต่ละไฟล์
+                                    download_all_btn = frame.locator("button:has-text('Download All'), a:has-text('Download All')").first
+                                    if download_all_btn.count() > 0:
+                                        with page.expect_download() as dl:
+                                            download_all_btn.click()
+                                        download_file = dl.value
+                                        wait_download(download_file, uat_folder / "uat_signoff.zip")
+                                        print("UAT Signoff downloaded")
+                                    else:
+                                        # ดาวน์โหลดทีละไฟล์
+                                        file_links = frame.locator("a[href*='sys_attachment']").all()
+                                        if len(file_links) > 0:
+                                            for idx, file_link in enumerate(file_links):
+                                                try:
+                                                    filename = file_link.inner_text().strip() or f"uat_signoff_{idx}.pdf"
+                                                    with page.expect_download() as dl:
+                                                        file_link.click()
+                                                    download_file = dl.value
+                                                    wait_download(download_file, uat_folder / safe_name(filename))
+                                                    print(f"UAT Signoff file downloaded: {filename}")
+                                                except Exception as e:
+                                                    print(f"[WARN] Failed to download UAT file {idx}: {e}")
+                                        else:
+                                            print("[WARN] UAT Signoff: No download links found")
+
+                                    # ปิด modal
+                                    page.keyboard.press("Escape")
+                                    frame.wait_for_timeout(500)
+                                else:
+                                    print("[WARN] UAT Signoff: No attachment link found in row")
+                            else:
+                                print("[WARN] UAT Signoff: Could not find attachment row")
+                        else:
+                            print("UAT not found (empty sys_id)")
+                    else:
+                        print("UAT not found")
+                else:
+                    print("[WARN] Supporting Documents tab not found")
+
+            except Exception as e:
+                print(f"[WARN] UAT Signoff download failed: {e}")
+
             # ---------- (B) Download attachments จาก paperclip ----------
             # DISABLED: Focus on PDF export first
             # try:
