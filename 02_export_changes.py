@@ -145,13 +145,38 @@ def main():
                         additional_actions_btn = page.locator('button.additional-actions-context-menu-button[aria-label="additional actions"]').first
 
                     additional_actions_btn.click(timeout=5_000)
-                    frame.wait_for_timeout(500)  # รอให้เมนูขึ้น
+                    print("Clicked Additional actions button")
 
-                    # Step 2: Hover และคลิก "Export" menu item
-                    export_menu = frame.locator('div.context_item[role="menuitem"][data-context-menu-label="Export"]').first
-                    if export_menu.count() == 0:
-                        # fallback: ลองหาด้วย item_id
-                        export_menu = frame.locator('div.context_item[item_id="context_exportmenu"]').first
+                    # รอให้เมนูแสดงและ stable
+                    frame.wait_for_timeout(1500)  # เพิ่มเวลารอจาก 500ms เป็น 1.5s
+
+                    # Step 2: รอให้ Export menu แสดงก่อนที่จะ hover
+                    export_menu = None
+                    for attempt in range(3):  # ลอง 3 ครั้ง
+                        try:
+                            # ลองหา Export menu item
+                            export_menu = frame.locator('div.context_item[role="menuitem"][data-context-menu-label="Export"]').first
+                            if export_menu.count() == 0:
+                                # fallback: ลองหาด้วย item_id
+                                export_menu = frame.locator('div.context_item[item_id="context_exportmenu"]').first
+
+                            if export_menu.count() > 0:
+                                # รอให้ visible
+                                export_menu.wait_for(state="visible", timeout=5_000)
+                                break
+                            else:
+                                if attempt < 2:
+                                    print(f"Export menu not found, retrying... (attempt {attempt+1}/3)")
+                                    frame.wait_for_timeout(1000)
+                        except Exception as e:
+                            if attempt < 2:
+                                print(f"Error waiting for Export menu, retrying... (attempt {attempt+1}/3)")
+                                frame.wait_for_timeout(1000)
+                            else:
+                                raise
+
+                    if export_menu is None or export_menu.count() == 0:
+                        raise Exception("Export menu not found after 3 attempts")
 
                     export_menu.hover()
                     frame.wait_for_timeout(500)  # รอให้ submenu แสดง
