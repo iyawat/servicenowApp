@@ -223,10 +223,12 @@ def main():
                         print("Opened Supporting Documents tab")
 
                         # หา attachment links ทั้งหมดในแท็บนี้
+                        print("[DEBUG] Searching for attachment links in Supporting Documents...")
                         attachment_links = frame.locator('a.attachment').all()
+                        print(f"[DEBUG] Found {len(attachment_links)} attachment link(s)")
 
                         if len(attachment_links) > 0:
-                            print(f"Found {len(attachment_links)} attachment(s) in Supporting Documents")
+                            print(f"Processing {len(attachment_links)} attachment(s) in Supporting Documents")
 
                             for link in attachment_links:
                                 try:
@@ -320,14 +322,14 @@ def main():
                             frame.wait_for_timeout(500)
                         else:
                             # มี attachments - หาปุ่ม "Download All"
-                            download_all_btn = frame.locator('input#download_all_button[value="Download All"]').first
+                            download_all_btn = frame.locator('input#download_all_button').first
                             if download_all_btn.count() == 0:
                                 # fallback: หาด้วย onclick
                                 download_all_btn = frame.locator('input[onclick*="downloadAllAttachments"]').first
 
                             if download_all_btn.count() == 0:
                                 # ลองหาใน page หลัก
-                                download_all_btn = page.locator('input#download_all_button[value="Download All"]').first
+                                download_all_btn = page.locator('input#download_all_button').first
 
                             if download_all_btn.count() > 0:
                                 # สร้างโฟลเดอร์ Attachment
