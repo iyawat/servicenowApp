@@ -328,11 +328,12 @@ def main():
                             print("Attachments downloaded")
 
                             # ปิด dialog
+                            print("[DEBUG] Closing Attachments dialog...")
                             page.keyboard.press("Escape")
                             frame.wait_for_timeout(500)
                         else:
-                            print("[WARN] Download All button not found in Attachments dialog")
-                            # ปิด dialog
+                            print("[INFO] No attachments or Download All button not found - closing dialog")
+                            # ปิด dialog และไปขั้นตอนถัดไป
                             page.keyboard.press("Escape")
                             frame.wait_for_timeout(500)
                     else:
