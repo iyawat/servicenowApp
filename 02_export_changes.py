@@ -117,30 +117,111 @@ def main():
 
             # ---------- (C) Supporting Documents tab ----------
             # ในรูปมี UAT SignOff / App Scan / CR File Attachment (เป็น link Click to add...)
-            # ส่วนมากคือ attachments เหมือนกัน แต่ถ้าต้องคลิกทีละช่อง ก็ทำได้
+            # ดาวน์โหลดไฟล์แนบจากแต่ละ field ใน Supporting Documents
             try:
                 # คลิกแท็บ Supporting Documents
                 tab = frame.get_by_role("tab", name="Supporting Documents")
                 if tab.count() > 0:
                     tab.click()
-                    frame.wait_for_timeout(800)
+                    frame.wait_for_timeout(1500)
+                    print("Opened Supporting Documents tab")
 
-                    # ลองเก็บแบบ “Download All” อีกครั้ง ถ้าหน้านี้มี attachment section
-                    # หรือคลิกแต่ละ “Click to add...” เพื่อดูไฟล์ที่แนบอยู่
-                    links = [
-                        "UAT SignOff File Attachment",
-                        "App Scan File Attachment",
-                        "CR File Attachment",
+                    # รายการ field attachments ที่ต้องการดาวน์โหลด
+                    attachment_fields = [
+                        ("UAT SignOff File Attachment", "uat_signoff"),
+                        ("App Scan File Attachment", "app_scan"),
+                        ("CR File Attachment", "cr_file"),
                     ]
-                    for label in links:
-                        # หาแถวที่มี label แล้วคลิกลิงก์ด้านขวา "Click to add..."
-                        row = frame.locator(f"text={label}").first
-                        if row.count() == 0:
-                            continue
 
-                        click_to_add = frame.get_by_text("Click to add...", exact=True).nth(0)
-                        # หมายเหตุ: ถ้าในแท็บมีหลาย "Click to add..." ต้องทำ selector ให้ผูกกับ label (ค่อยปรับตอน debug)
-                        # โค้ดนี้เป็น skeleton
+                    for label, folder_name in attachment_fields:
+                        try:
+                            # หา label row
+                            label_elem = frame.locator(f"text={label}").first
+                            if label_elem.count() == 0:
+                                continue
+
+                            # หาช่อง attachment ที่อยู่ติดกับ label (มักเป็น sibling หรือ parent row)
+                            # วิธีที่ 1: ลองหาปุ่ม paperclip หรือ attachment link ในบริเวณเดียวกับ label
+                            # วิธีที่ 2: หา "Click to add..." link ถ้ามีไฟล์แนบแล้วจะเป็น link ที่แสดงจำนวนไฟล์
+
+                            # หา parent row ของ label
+                            parent_row = label_elem.locator("xpath=ancestor::tr[1]")
+
+                            # ลองหา paperclip icon หรือ attachment link ในแถวนี้
+                            attachment_links = parent_row.locator("a[aria-label*='Attachment'], span.icon-paperclip, a:has-text('attachment')").all()
+
+                            # หรือลองหาปุ่มที่แสดงจำนวนไฟล์ เช่น "2 attachments"
+                            attachment_count_links = parent_row.locator("a.list_edit_attachment").all()
+
+                            if len(attachment_count_links) > 0:
+                                # มีไฟล์แนบ - คลิกเพื่อเปิด attachment modal
+                                print(f"  Found attachments in {label}")
+                                attachment_count_links[0].click()
+                                frame.wait_for_timeout(1000)
+
+                                # สร้างโฟลเดอร์ย่อยสำหรับ field นี้
+                                field_folder = folder / "supporting_documents" / folder_name
+                                field_folder.mkdir(parents=True, exist_ok=True)
+
+                                # ดาวน์โหลดไฟล์ทั้งหมดจาก modal
+                                # วิธีที่ 1: ลองหาปุ่ม "Download All"
+                                download_all_btn = frame.locator("button:has-text('Download All'), a:has-text('Download All')").first
+                                if download_all_btn.count() > 0:
+                                    with page.expect_download() as dl:
+                                        download_all_btn.click()
+                                    download = dl.value
+                                    wait_download(download, field_folder / f"{folder_name}_all.zip")
+                                    print(f"    Downloaded all files from {label}")
+                                else:
+                                    # วิธีที่ 2: ดาวน์โหลดทีละไฟล์
+                                    file_links = frame.locator("a[href*='sys_attachment']").all()
+                                    for idx, file_link in enumerate(file_links):
+                                        try:
+                                            filename = file_link.inner_text().strip()
+                                            if filename:
+                                                with page.expect_download() as dl:
+                                                    file_link.click()
+                                                download = dl.value
+                                                wait_download(download, field_folder / safe_name(filename))
+                                                print(f"    Downloaded: {filename}")
+                                        except Exception as e:
+                                            print(f"    [WARN] Failed to download file {idx}: {e}")
+
+                                # ปิด modal (กด ESC หรือหาปุ่ม close)
+                                page.keyboard.press("Escape")
+                                frame.wait_for_timeout(500)
+
+                            elif len(attachment_links) > 0:
+                                # มี paperclip icon - คลิกเพื่อเปิด
+                                print(f"  Found attachment icon in {label}")
+                                attachment_links[0].click()
+                                frame.wait_for_timeout(1000)
+
+                                # ทำการดาวน์โหลดเหมือนข้างบน
+                                field_folder = folder / "supporting_documents" / folder_name
+                                field_folder.mkdir(parents=True, exist_ok=True)
+
+                                download_all_btn = frame.locator("button:has-text('Download All'), a:has-text('Download All')").first
+                                if download_all_btn.count() > 0:
+                                    with page.expect_download() as dl:
+                                        download_all_btn.click()
+                                    download = dl.value
+                                    wait_download(download, field_folder / f"{folder_name}_all.zip")
+                                    print(f"    Downloaded all files from {label}")
+
+                                page.keyboard.press("Escape")
+                                frame.wait_for_timeout(500)
+                            else:
+                                print(f"  No attachments found for {label}")
+
+                        except Exception as e:
+                            print(f"  [WARN] Failed to process {label}: {e}")
+
+                    # กลับไปแท็บแรก (optional)
+                    # main_tab = frame.get_by_role("tab", name="Planning")
+                    # if main_tab.count() > 0:
+                    #     main_tab.click()
+
             except Exception as e:
                 print(f"[WARN] Supporting Documents handling skipped: {e}")
 
