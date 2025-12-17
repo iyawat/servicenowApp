@@ -321,8 +321,9 @@ def main():
                             attachment_folder.mkdir(parents=True, exist_ok=True)
 
                             print("Downloading all attachments...")
+                            # ใช้ JavaScript click เพราะปุ่มอาจจะไม่ visible
                             with page.expect_download() as dl:
-                                download_all_btn.click()
+                                page.evaluate("document.getElementById('download_all_button').click()")
                             download_file = dl.value
                             wait_download(download_file, attachment_folder / "attachments_all.zip")
                             print("Attachments downloaded")
