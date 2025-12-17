@@ -191,6 +191,58 @@ def main():
             except Exception as e:
                 print(f"[WARN] UAT Signoff download failed: {e}")
 
+            # ---------- (E) Download All Attachments ----------
+            try:
+                # คลิกปุ่ม paperclip icon (Manage Attachments)
+                paperclip_btn = frame.locator('button#header_add_attachment').first
+                if paperclip_btn.count() == 0:
+                    # fallback: หาด้วย class และ aria-label
+                    paperclip_btn = frame.locator('button.icon-paperclip[aria-label="Manage Attachments"]').first
+
+                if paperclip_btn.count() == 0:
+                    # ลองหาใน page หลัก
+                    paperclip_btn = page.locator('button#header_add_attachment').first
+
+                if paperclip_btn.count() > 0:
+                    paperclip_btn.click()
+                    print("Clicked Manage Attachments button")
+
+                    # รอให้ Attachments dialog popup ขึ้นมา
+                    frame.wait_for_timeout(2000)
+
+                    # หาปุ่ม "Download All"
+                    download_all_btn = frame.locator('input#download_all_button[value="Download All"]').first
+                    if download_all_btn.count() == 0:
+                        # fallback: หาด้วย onclick
+                        download_all_btn = frame.locator('input[onclick*="downloadAllAttachments"]').first
+
+                    if download_all_btn.count() == 0:
+                        # ลองหาใน page หลัก
+                        download_all_btn = page.locator('input#download_all_button[value="Download All"]').first
+
+                    if download_all_btn.count() > 0:
+                        # สร้างโฟลเดอร์ Attachment
+                        attachment_folder = folder / "Attachment"
+                        attachment_folder.mkdir(parents=True, exist_ok=True)
+
+                        print("Downloading all attachments...")
+                        with page.expect_download() as dl:
+                            download_all_btn.click()
+                        download_file = dl.value
+                        wait_download(download_file, attachment_folder / "attachments_all.zip")
+                        print("Attachments downloaded")
+
+                        # ปิด dialog
+                        page.keyboard.press("Escape")
+                        frame.wait_for_timeout(500)
+                    else:
+                        print("[WARN] Download All button not found in Attachments dialog")
+                else:
+                    print("[INFO] No attachments button found (may not have attachments)")
+
+            except Exception as e:
+                print(f"[WARN] Attachments download failed: {e}")
+
             # ---------- (B) Download attachments จาก paperclip ----------
             # DISABLED: Focus on PDF export first
             # try:
