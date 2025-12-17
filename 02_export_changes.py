@@ -5,6 +5,7 @@ from playwright.sync_api import sync_playwright
 BASE = "https://seicthdev.service-now.com"
 STATE = "state.json"
 OUT = Path("output")
+DOWNLOADED_LOG = Path("downloaded.log")  # Log file to track completed downloads
 
 # ปรับ URL list ให้ตรงกับของคุณ (ตัวอย่างเป็น change_request list)
 CHANGE_LIST_URL = (
@@ -21,8 +22,34 @@ def wait_download(download, target: Path):
     target.parent.mkdir(parents=True, exist_ok=True)
     download.save_as(str(target))
 
+def load_downloaded() -> set:
+    """Load the set of already downloaded change numbers from log file"""
+    if not DOWNLOADED_LOG.exists():
+        return set()
+
+    downloaded = set()
+    with open(DOWNLOADED_LOG, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                downloaded.add(line)
+    return downloaded
+
+def mark_downloaded(change_number: str):
+    """Mark a change number as downloaded by appending to log file"""
+    with open(DOWNLOADED_LOG, 'a', encoding='utf-8') as f:
+        f.write(f"{change_number}\n")
+        f.flush()  # Ensure it's written immediately
+
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
+
+    # Load already downloaded change numbers for resume capability
+    downloaded = load_downloaded()
+    if downloaded:
+        print(f"Found {len(downloaded)} already downloaded change(s). Will skip them.")
+    else:
+        print("No previous downloads found. Starting fresh.")
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)  # ตอนแรกแนะนำ headless=False เพื่อ debug selector
@@ -76,6 +103,11 @@ def main():
                 link = row.locator("a.linked.formlink").first
                 number = link.inner_text().strip()
                 if not number:
+                    continue
+
+                # Check if already downloaded (for resume capability)
+                if number in downloaded:
+                    print(f"\n=== {number} (Row {i+1}/{count}, Page {page_number}) === [SKIPPED - Already downloaded]")
                     continue
 
                 folder = OUT / safe_name(number)
@@ -275,6 +307,10 @@ def main():
 
             except Exception as e:
                 print(f"[WARN] Attachments download failed: {e}")
+
+            # Mark this change as downloaded (for resume capability)
+            mark_downloaded(number)
+            print(f"✓ {number} completed and logged")
 
             # ---------- (B) Download attachments จาก paperclip ----------
             # DISABLED: Focus on PDF export first
