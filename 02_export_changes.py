@@ -2,7 +2,12 @@ import re
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
+## DEV
 BASE = "https://seicthdev.service-now.com"
+
+#PRD
+# BASE = "https://seicth.service-now.com/"
+
 STATE = "state.json"
 OUT = Path("output")
 DOWNLOADED_LOG = Path("downloaded.log")  # Log file to track completed downloads
@@ -117,11 +122,23 @@ def main():
 
                 # เปิด record ในแท็บเดิม
                 link.click()
+
+                # รายการแรกอาจจะต้องรอนานกว่า (session initialization)
+                if i == 0 and page_number == 1:
+                    print("First record - waiting extra time for page to stabilize...")
+                    page.wait_for_timeout(5000)
+                else:
+                    page.wait_for_timeout(2000)
+
                 # หลังคลิกเข้า record หน้า form มักอยู่ใน gsft_main เหมือนเดิม
                 frame = page.frame(name="gsft_main") or page
 
                 # รอ form มา
-                frame.wait_for_selector("form", timeout=60_000)
+                try:
+                    frame.wait_for_selector("form", timeout=60_000)
+                except Exception as e:
+                    print(f"[WARN] Form not found, trying to continue anyway. Error: {e}")
+                    page.wait_for_timeout(3000)
 
                 # ---------- (A) Export PDF ผ่าน UI ----------
                 # Step 1-5: Additional actions -> Export -> PDF -> Export -> Download
@@ -133,13 +150,38 @@ def main():
                         additional_actions_btn = page.locator('button.additional-actions-context-menu-button[aria-label="additional actions"]').first
 
                     additional_actions_btn.click(timeout=5_000)
-                    frame.wait_for_timeout(500)  # รอให้เมนูขึ้น
+                    print("Clicked Additional actions button")
 
-                    # Step 2: Hover และคลิก "Export" menu item
-                    export_menu = frame.locator('div.context_item[role="menuitem"][data-context-menu-label="Export"]').first
-                    if export_menu.count() == 0:
-                        # fallback: ลองหาด้วย item_id
-                        export_menu = frame.locator('div.context_item[item_id="context_exportmenu"]').first
+                    # รอให้เมนูแสดงและ stable
+                    frame.wait_for_timeout(1500)  # เพิ่มเวลารอจาก 500ms เป็น 1.5s
+
+                    # Step 2: รอให้ Export menu แสดงก่อนที่จะ hover
+                    export_menu = None
+                    for attempt in range(3):  # ลอง 3 ครั้ง
+                        try:
+                            # ลองหา Export menu item
+                            export_menu = frame.locator('div.context_item[role="menuitem"][data-context-menu-label="Export"]').first
+                            if export_menu.count() == 0:
+                                # fallback: ลองหาด้วย item_id
+                                export_menu = frame.locator('div.context_item[item_id="context_exportmenu"]').first
+
+                            if export_menu.count() > 0:
+                                # รอให้ visible
+                                export_menu.wait_for(state="visible", timeout=5_000)
+                                break
+                            else:
+                                if attempt < 2:
+                                    print(f"Export menu not found, retrying... (attempt {attempt+1}/3)")
+                                    frame.wait_for_timeout(1000)
+                        except Exception as e:
+                            if attempt < 2:
+                                print(f"Error waiting for Export menu, retrying... (attempt {attempt+1}/3)")
+                                frame.wait_for_timeout(1000)
+                            else:
+                                raise
+
+                    if export_menu is None or export_menu.count() == 0:
+                        raise Exception("Export menu not found after 3 attempts")
 
                     export_menu.hover()
                     frame.wait_for_timeout(500)  # รอให้ submenu แสดง
@@ -176,7 +218,7 @@ def main():
                 except Exception as e:
                     print(f"[WARN] Export PDF failed: {e}")
 
-                # ---------- (D) Download UAT Signoff from Supporting Documents ----------
+                # ---------- (D) Download from Supporting Documents (CRFile, UAT Signoff, AppScan) ----------
                 try:
                     # คลิกแท็บ "Supporting Documents"
                     supporting_docs_tab = frame.locator('span.tab_caption_text:has-text("Supporting Documents")').first
@@ -185,48 +227,60 @@ def main():
                         frame.wait_for_timeout(1500)
                         print("Opened Supporting Documents tab")
 
-                        # หา UAT Signoff attachment field
-                        uat_input = frame.locator('input#attachment\\.change_request\\.u_file_attachment_2[type="hidden"]').first
+                        # หา attachment download links เท่านั้น (ไม่รวม rename, view buttons)
+                        print("[DEBUG] Searching for download links in Supporting Documents...")
+                        attachment_links = frame.locator('a.attachment[href*="sys_attachment.do"]').all()
+                        print(f"[DEBUG] Found {len(attachment_links)} download link(s)")
 
-                        if uat_input.count() > 0:
-                            # ได้ sys_id ของ attachment
-                            sys_id = uat_input.get_attribute("value")
+                        if len(attachment_links) > 0:
+                            print(f"Processing {len(attachment_links)} attachment(s) in Supporting Documents")
 
-                            if sys_id and sys_id.strip():
-                                print(f"Found UAT Signoff attachment (sys_id: {sys_id})")
+                            for link in attachment_links:
+                                try:
+                                    # ดึงชื่อไฟล์
+                                    filename = link.inner_text().strip()
+                                    if not filename:
+                                        continue
 
-                                # สร้างโฟลเดอร์ UAT Signoff
-                                uat_folder = folder / "UAT Signoff"
-                                uat_folder.mkdir(parents=True, exist_ok=True)
+                                    # ตัดสินใจ subfolder จากชื่อไฟล์
+                                    filename_upper = filename.upper()
+                                    filename_lower = filename.lower()
 
-                                # ดาวน์โหลดโดยใช้ sys_id - หา download link โดยตรง
-                                # หา link ที่มี class="attachment" และ href="sys_attachment.do?sys_id=..."
-                                download_link = frame.locator(f'a.attachment[id="{sys_id}"]').first
+                                    if 'UAT' in filename_upper or 'SIGNOFF' in filename_upper:
+                                        subfolder_name = 'UAT Signoff'
+                                    elif 'APP SCAN' in filename_upper or 'APPSCAN' in filename_upper or 'app scan' in filename_lower:
+                                        subfolder_name = 'AppScan'
+                                    elif filename.startswith('RE') or 'SDR' in filename_upper or 'FORM' in filename_upper:
+                                        subfolder_name = 'CRFile'
+                                    else:
+                                        subfolder_name = 'Supporting Documents'
 
-                                if download_link.count() == 0:
-                                    # fallback: หาด้วย href
-                                    download_link = frame.locator(f'a.attachment[href*="{sys_id}"]').first
+                                    # สร้างโฟลเดอร์
+                                    subfolder = folder / subfolder_name
+                                    subfolder.mkdir(parents=True, exist_ok=True)
 
-                                if download_link.count() > 0:
-                                    filename = download_link.inner_text().strip() or "uat_signoff.eml"
-                                    print(f"Downloading: {filename}")
+                                    # ดาวน์โหลด
+                                    print(f"Downloading {subfolder_name}: {filename}")
 
                                     with page.expect_download() as dl:
-                                        download_link.click()
+                                        link.click()
                                     download_file = dl.value
-                                    wait_download(download_file, uat_folder / safe_name(filename))
-                                    print(f"UAT Signoff downloaded: {filename}")
-                                else:
-                                    print("[WARN] UAT Signoff: Download link not found")
-                            else:
-                                print("UAT not found (empty sys_id)")
+                                    wait_download(download_file, subfolder / safe_name(filename))
+                                    print(f"✓ {subfolder_name} downloaded: {filename}")
+
+                                    # รอสักครู่หลัง download แต่ละไฟล์
+                                    frame.wait_for_timeout(500)
+
+                                except Exception as e:
+                                    print(f"[WARN] Could not download {filename}: {e}")
                         else:
-                            print("UAT not found")
+                            print("No attachments found in Supporting Documents")
+
                     else:
                         print("[WARN] Supporting Documents tab not found")
 
                 except Exception as e:
-                    print(f"[WARN] UAT Signoff download failed: {e}")
+                    print(f"[WARN] Supporting Documents processing failed: {e}")
 
                 # ---------- (E) Download All Attachments ----------
                 try:
@@ -247,61 +301,45 @@ def main():
                         # รอให้ Attachments dialog popup ขึ้นมา
                         frame.wait_for_timeout(2000)
 
-                        # ตรวจสอบว่ามีข้อความ "There are no attachments" หรือไม่
-                        no_attachments_msg = frame.locator('text=There are no attachments').first
-                        if no_attachments_msg.count() == 0:
-                            no_attachments_msg = page.locator('text=There are no attachments').first
+                        # หาปุ่ม Download All โดยตรง แทนที่จะตรวจสอบข้อความ
+                        print("[DEBUG] Looking for Download All button...")
 
-                        if no_attachments_msg.count() > 0:
-                            print("No attachments found")
-                            # ปิด dialog ด้วยปุ่ม Close
-                            close_btn = frame.locator('button#attachment_closemodal').first
-                            if close_btn.count() == 0:
-                                # fallback: หาด้วย data-dismiss และ class
-                                close_btn = frame.locator('button[data-dismiss="GlideModal"].close').first
+                        # ลองหาใน page หลักก่อน (modal อาจจะอยู่นอก frame)
+                        download_all_btn = page.locator('input#download_all_button').first
+                        if download_all_btn.count() > 0:
+                            print("[DEBUG] Found Download All button in page context")
+                        else:
+                            # ลองหาใน frame
+                            download_all_btn = frame.locator('input#download_all_button').first
+                            if download_all_btn.count() > 0:
+                                print("[DEBUG] Found Download All button in frame context")
 
-                            if close_btn.count() == 0:
-                                # ลองหาใน page หลัก
-                                close_btn = page.locator('button#attachment_closemodal').first
+                        if download_all_btn.count() == 0:
+                            # fallback: หาด้วย onclick
+                            download_all_btn = page.locator('input[onclick*="downloadAllAttachments"]').first
+                            if download_all_btn.count() > 0:
+                                print("[DEBUG] Found Download All button by onclick attribute")
 
-                            if close_btn.count() > 0:
-                                close_btn.click()
-                            else:
-                                # fallback: ใช้ ESC ถ้าหาปุ่มไม่เจอ
-                                page.keyboard.press("Escape")
+                        if download_all_btn.count() > 0:
+                            # สร้างโฟลเดอร์ Attachment
+                            attachment_folder = folder / "Attachment"
+                            attachment_folder.mkdir(parents=True, exist_ok=True)
 
+                            print("Downloading all attachments...")
+                            with page.expect_download() as dl:
+                                download_all_btn.click()
+                            download_file = dl.value
+                            wait_download(download_file, attachment_folder / "attachments_all.zip")
+                            print("Attachments downloaded")
+
+                            # ปิด dialog
+                            page.keyboard.press("Escape")
                             frame.wait_for_timeout(500)
                         else:
-                            # มี attachments - หาปุ่ม "Download All"
-                            download_all_btn = frame.locator('input#download_all_button[value="Download All"]').first
-                            if download_all_btn.count() == 0:
-                                # fallback: หาด้วย onclick
-                                download_all_btn = frame.locator('input[onclick*="downloadAllAttachments"]').first
-
-                            if download_all_btn.count() == 0:
-                                # ลองหาใน page หลัก
-                                download_all_btn = page.locator('input#download_all_button[value="Download All"]').first
-
-                            if download_all_btn.count() > 0:
-                                # สร้างโฟลเดอร์ Attachment
-                                attachment_folder = folder / "Attachment"
-                                attachment_folder.mkdir(parents=True, exist_ok=True)
-
-                                print("Downloading all attachments...")
-                                with page.expect_download() as dl:
-                                    download_all_btn.click()
-                                download_file = dl.value
-                                wait_download(download_file, attachment_folder / "attachments_all.zip")
-                                print("Attachments downloaded")
-
-                                # ปิด dialog
-                                page.keyboard.press("Escape")
-                                frame.wait_for_timeout(500)
-                            else:
-                                print("[WARN] Download All button not found in Attachments dialog")
-                                # ปิด dialog
-                                page.keyboard.press("Escape")
-                                frame.wait_for_timeout(500)
+                            print("[WARN] Download All button not found in Attachments dialog")
+                            # ปิด dialog
+                            page.keyboard.press("Escape")
+                            frame.wait_for_timeout(500)
                     else:
                         print("[INFO] No attachments button found (may not have attachments)")
 
@@ -461,41 +499,61 @@ def main():
             # หลังจากประมวลผลทุก row ในหน้านี้แล้ว ตรวจสอบว่ามีปุ่ม Next Page หรือไม่
             print(f"\nCompleted page {page_number}. Checking for next page...")
 
-            # หาปุ่ม Next Page
-            next_page_btn = frame.locator('button:has(span.icon-vcr-right)').first
-            if next_page_btn.count() == 0:
-                # fallback: หาด้วย span โดยตรงแล้วหา parent button
-                next_page_icon = frame.locator('span.icon-vcr-right').first
-                if next_page_icon.count() > 0:
-                    next_page_btn = next_page_icon.locator('xpath=ancestor::button[1]').first
-                    if next_page_btn.count() == 0:
-                        # อาจเป็น anchor tag
-                        next_page_btn = next_page_icon.locator('xpath=ancestor::a[1]').first
+            # Scroll หน้าลงไปล่างสุดก่อน เพื่อให้ pagination buttons เข้ามาในมุมมอง
+            try:
+                frame.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                page.wait_for_timeout(500)
+            except:
+                pass
 
-            # ตรวจสอบว่ามีปุ่มและ enabled หรือไม่
-            if next_page_btn.count() > 0:
-                try:
-                    # ตรวจสอบว่าปุ่มไม่ disabled
-                    is_disabled = next_page_btn.get_attribute("disabled")
-                    if is_disabled is None:
-                        print(f"Clicking Next Page button...")
-                        next_page_btn.click()
-                        page.wait_for_timeout(2000)  # รอให้หน้าใหม่โหลด
+            # ใช้ JavaScript หาและ click ปุ่ม Next เพราะ Playwright click อาจถูกบัง
+            try:
+                # ลอง click ด้วย JavaScript โดยตรง (หลีกเลี่ยงปัญหา element ถูกบัง)
+                result = frame.evaluate("""
+                    () => {
+                        // หาปุ่ม Next โดยใช้ name attribute
+                        const btn = document.querySelector('button[name="vcr_next"]');
+                        if (!btn) {
+                            return { found: false, reason: 'button not found' };
+                        }
 
-                        # รอให้ตารางมา
-                        frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
-                        page.wait_for_timeout(1000)
+                        // ตรวจสอบว่า disabled หรือไม่
+                        if (btn.disabled) {
+                            return { found: true, disabled: true };
+                        }
 
-                        page_number += 1
-                        continue  # วนต่อไปยังหน้าถัดไป
-                    else:
-                        print("Next Page button is disabled. Reached last page.")
-                        break
-                except Exception as e:
-                    print(f"[WARN] Failed to click Next Page: {e}")
+                        // Click ด้วย JavaScript
+                        btn.click();
+                        return { found: true, disabled: false, clicked: true };
+                    }
+                """)
+
+                print(f"Next Page button check: {result}")
+
+                if not result.get('found'):
+                    print("No Next Page button found. Reached last page.")
                     break
-            else:
-                print("No Next Page button found. Reached last page.")
+                elif result.get('disabled'):
+                    print("Next Page button is disabled. Reached last page.")
+                    break
+                elif result.get('clicked'):
+                    print("Successfully clicked Next Page button with JavaScript")
+
+                    # รอให้หน้าใหม่โหลด
+                    page.wait_for_timeout(3000)
+
+                    # รอให้ตารางมา
+                    frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
+                    page.wait_for_timeout(1000)
+
+                    page_number += 1
+                    continue  # วนต่อไปยังหน้าถัดไป
+                else:
+                    print("[WARN] Unexpected result from Next Page button click")
+                    break
+
+            except Exception as e:
+                print(f"[WARN] Failed to click Next Page with JavaScript: {e}")
                 break
 
         print(f"\n===== Completed! Processed {page_number} page(s) =====")
