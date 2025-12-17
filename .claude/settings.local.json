@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat:*)",
+      "Bash(if [ -f requirements.txt ])",
+      "Bash(then cat requirements.txt)",
+      "Bash(elif [ -f pyproject.toml ])",
+      "Bash(then cat pyproject.toml)",
+      "Bash(elif [ -f setup.py ])",
+      "Bash(then cat setup.py)",
+      "Bash(else echo \"No dependency file found\")",
+      "Bash(fi)",
+      "Bash(source .venv/bin/activate)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
