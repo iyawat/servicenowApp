@@ -7,7 +7,10 @@ STATE = "state.json"
 OUT = Path("output")
 
 # ปรับ URL list ให้ตรงกับของคุณ (ตัวอย่างเป็น change_request list)
-CHANGE_LIST_URL = f"{BASE}/now/nav/ui/classic/params/target/change_request_list.do%3Fsysparm_query%3Dtype%3DCAB%5EORDERBYDESCsys_updated_on"
+CHANGE_LIST_URL = (
+    f"{BASE}/now/nav/ui/classic/params/target/"
+    "change_request_list.do?sysparm_view=cab"
+)
 
 def safe_name(s: str) -> str:
     s = s.strip()
