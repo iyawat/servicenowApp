@@ -498,68 +498,61 @@ def main():
             # หลังจากประมวลผลทุก row ในหน้านี้แล้ว ตรวจสอบว่ามีปุ่ม Next Page หรือไม่
             print(f"\nCompleted page {page_number}. Checking for next page...")
 
-            # หาปุ่ม Next Page - ใช้ selector ที่แม่นยำกว่า
-            next_page_btn = frame.locator('button[name="vcr_next"]').first
-            if next_page_btn.count() == 0:
-                # fallback 1: หาด้วย aria-label
-                next_page_btn = frame.locator('button[aria-label="Next page"]').first
+            # Scroll หน้าลงไปล่างสุดก่อน เพื่อให้ pagination buttons เข้ามาในมุมมอง
+            try:
+                frame.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                page.wait_for_timeout(500)
+            except:
+                pass
 
-            if next_page_btn.count() == 0:
-                # fallback 2: หาด้วย span icon
-                next_page_btn = frame.locator('button:has(span.icon-vcr-right)').first
+            # ใช้ JavaScript หาและ click ปุ่ม Next เพราะ Playwright click อาจถูกบัง
+            try:
+                # ลอง click ด้วย JavaScript โดยตรง (หลีกเลี่ยงปัญหา element ถูกบัง)
+                result = frame.evaluate("""
+                    () => {
+                        // หาปุ่ม Next โดยใช้ name attribute
+                        const btn = document.querySelector('button[name="vcr_next"]');
+                        if (!btn) {
+                            return { found: false, reason: 'button not found' };
+                        }
 
-            if next_page_btn.count() == 0:
-                # fallback 3: หาด้วย span โดยตรงแล้วหา parent button
-                next_page_icon = frame.locator('span.icon-vcr-right').first
-                if next_page_icon.count() > 0:
-                    next_page_btn = next_page_icon.locator('xpath=ancestor::button[1]').first
-                    if next_page_btn.count() == 0:
-                        # อาจเป็น anchor tag
-                        next_page_btn = next_page_icon.locator('xpath=ancestor::a[1]').first
+                        // ตรวจสอบว่า disabled หรือไม่
+                        if (btn.disabled) {
+                            return { found: true, disabled: true };
+                        }
 
-            # ตรวจสอบว่ามีปุ่มและ enabled หรือไม่
-            if next_page_btn.count() > 0:
-                try:
-                    # ตรวจสอบว่าปุ่มไม่ disabled
-                    is_disabled = next_page_btn.get_attribute("disabled")
-                    if is_disabled is None:
-                        print(f"Found Next Page button, scrolling into view...")
+                        // Click ด้วย JavaScript
+                        btn.click();
+                        return { found: true, disabled: false, clicked: true };
+                    }
+                """)
 
-                        # Scroll ให้ปุ่มเข้ามาในมุมมอง
-                        next_page_btn.scroll_into_view_if_needed()
-                        frame.wait_for_timeout(500)
+                print(f"Next Page button check: {result}")
 
-                        # รอให้ปุ่ม visible
-                        try:
-                            next_page_btn.wait_for(state="visible", timeout=5_000)
-                        except Exception as e:
-                            print(f"Next Page button not visible, trying to continue anyway...")
-
-                        print(f"Clicking Next Page button...")
-
-                        # ลอง click โดยใช้ force=True ถ้าจำเป็น
-                        try:
-                            next_page_btn.click(timeout=10_000)
-                        except Exception as e:
-                            print(f"Normal click failed, trying force click...")
-                            next_page_btn.click(force=True)
-
-                        page.wait_for_timeout(3000)  # เพิ่มเวลารอให้หน้าใหม่โหลด
-
-                        # รอให้ตารางมา
-                        frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
-                        page.wait_for_timeout(1000)
-
-                        page_number += 1
-                        continue  # วนต่อไปยังหน้าถัดไป
-                    else:
-                        print("Next Page button is disabled. Reached last page.")
-                        break
-                except Exception as e:
-                    print(f"[WARN] Failed to click Next Page: {e}")
+                if not result.get('found'):
+                    print("No Next Page button found. Reached last page.")
                     break
-            else:
-                print("No Next Page button found. Reached last page.")
+                elif result.get('disabled'):
+                    print("Next Page button is disabled. Reached last page.")
+                    break
+                elif result.get('clicked'):
+                    print("Successfully clicked Next Page button with JavaScript")
+
+                    # รอให้หน้าใหม่โหลด
+                    page.wait_for_timeout(3000)
+
+                    # รอให้ตารางมา
+                    frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
+                    page.wait_for_timeout(1000)
+
+                    page_number += 1
+                    continue  # วนต่อไปยังหน้าถัดไป
+                else:
+                    print("[WARN] Unexpected result from Next Page button click")
+                    break
+
+            except Exception as e:
+                print(f"[WARN] Failed to click Next Page with JavaScript: {e}")
                 break
 
         print(f"\n===== Completed! Processed {page_number} page(s) =====")
