@@ -162,49 +162,25 @@ def main():
                             uat_folder = folder / "UAT Signoff"
                             uat_folder.mkdir(parents=True, exist_ok=True)
 
-                            # ดาวน์โหลดโดยใช้ sys_id
-                            # วิธีที่ 1: หา download link จาก attachment field
-                            attachment_row = uat_input.locator("xpath=ancestor::tr[1]").first
-                            if attachment_row.count() > 0:
-                                # หา paperclip icon หรือ attachment link
-                                attachment_link = attachment_row.locator('a[href*="sys_attachment"], span.icon-paperclip, a.list_edit_attachment').first
+                            # ดาวน์โหลดโดยใช้ sys_id - หา download link โดยตรง
+                            # หา link ที่มี class="attachment" และ href="sys_attachment.do?sys_id=..."
+                            download_link = frame.locator(f'a.attachment[id="{sys_id}"]').first
 
-                                if attachment_link.count() > 0:
-                                    attachment_link.click()
-                                    frame.wait_for_timeout(1000)
+                            if download_link.count() == 0:
+                                # fallback: หาด้วย href
+                                download_link = frame.locator(f'a.attachment[href*="{sys_id}"]').first
 
-                                    # หาปุ่ม Download All หรือไฟล์แต่ละไฟล์
-                                    download_all_btn = frame.locator("button:has-text('Download All'), a:has-text('Download All')").first
-                                    if download_all_btn.count() > 0:
-                                        with page.expect_download() as dl:
-                                            download_all_btn.click()
-                                        download_file = dl.value
-                                        wait_download(download_file, uat_folder / "uat_signoff.zip")
-                                        print("UAT Signoff downloaded")
-                                    else:
-                                        # ดาวน์โหลดทีละไฟล์
-                                        file_links = frame.locator("a[href*='sys_attachment']").all()
-                                        if len(file_links) > 0:
-                                            for idx, file_link in enumerate(file_links):
-                                                try:
-                                                    filename = file_link.inner_text().strip() or f"uat_signoff_{idx}.pdf"
-                                                    with page.expect_download() as dl:
-                                                        file_link.click()
-                                                    download_file = dl.value
-                                                    wait_download(download_file, uat_folder / safe_name(filename))
-                                                    print(f"UAT Signoff file downloaded: {filename}")
-                                                except Exception as e:
-                                                    print(f"[WARN] Failed to download UAT file {idx}: {e}")
-                                        else:
-                                            print("[WARN] UAT Signoff: No download links found")
+                            if download_link.count() > 0:
+                                filename = download_link.inner_text().strip() or "uat_signoff.eml"
+                                print(f"Downloading: {filename}")
 
-                                    # ปิด modal
-                                    page.keyboard.press("Escape")
-                                    frame.wait_for_timeout(500)
-                                else:
-                                    print("[WARN] UAT Signoff: No attachment link found in row")
+                                with page.expect_download() as dl:
+                                    download_link.click()
+                                download_file = dl.value
+                                wait_download(download_file, uat_folder / safe_name(filename))
+                                print(f"UAT Signoff downloaded: {filename}")
                             else:
-                                print("[WARN] UAT Signoff: Could not find attachment row")
+                                print("[WARN] UAT Signoff: Download link not found")
                         else:
                             print("UAT not found (empty sys_id)")
                     else:
