@@ -322,14 +322,23 @@ def main():
                             frame.wait_for_timeout(500)
                         else:
                             # มี attachments - หาปุ่ม "Download All"
-                            download_all_btn = frame.locator('input#download_all_button').first
-                            if download_all_btn.count() == 0:
-                                # fallback: หาด้วย onclick
-                                download_all_btn = frame.locator('input[onclick*="downloadAllAttachments"]').first
+                            print("[DEBUG] Looking for Download All button...")
+
+                            # ลองหาใน page หลักก่อน (modal อาจจะอยู่นอก frame)
+                            download_all_btn = page.locator('input#download_all_button').first
+                            if download_all_btn.count() > 0:
+                                print("[DEBUG] Found Download All button in page context")
+                            else:
+                                # ลองหาใน frame
+                                download_all_btn = frame.locator('input#download_all_button').first
+                                if download_all_btn.count() > 0:
+                                    print("[DEBUG] Found Download All button in frame context")
 
                             if download_all_btn.count() == 0:
-                                # ลองหาใน page หลัก
-                                download_all_btn = page.locator('input#download_all_button').first
+                                # fallback: หาด้วย onclick
+                                download_all_btn = page.locator('input[onclick*="downloadAllAttachments"]').first
+                                if download_all_btn.count() > 0:
+                                    print("[DEBUG] Found Download All button by onclick attribute")
 
                             if download_all_btn.count() > 0:
                                 # สร้างโฟลเดอร์ Attachment
