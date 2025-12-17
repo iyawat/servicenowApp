@@ -12,8 +12,18 @@ def main():
 
         page.goto(BASE, wait_until="domcontentloaded")
 
-        # กดปุ่ม "Login with SSO" (ตามหน้าจอที่คุณส่งมา)
-        page.get_by_text("Login with SSO", exact=True).click()
+        # กดปุ่ม "Login with SSO" ถ้ามี (บาง instance redirect ไปหน้า SAML โดยตรง)
+        try:
+            login_sso_btn = page.locator('text="Login with SSO"').first
+            if login_sso_btn.count() > 0:
+                print("Found 'Login with SSO' button, clicking...")
+                login_sso_btn.click(timeout=5_000)
+                page.wait_for_timeout(2000)
+            else:
+                print("No 'Login with SSO' button - already on SSO/SAML login page")
+        except Exception as e:
+            print(f"Could not click 'Login with SSO' - might already be on SSO/SAML login page")
+            print(f"Error: {e}")
 
         print("\n[Action Required]")
         print("ทำ SSO login + MFA ให้เสร็จในหน้าต่าง browser ที่เปิดอยู่")
