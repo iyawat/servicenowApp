@@ -58,25 +58,30 @@ def main():
             raise
 
         # ดึง link ของ change number ในหน้าปัจจุบัน
-        # (ถ้าต้องการหลายหน้า ให้ทำ pagination เพิ่ม)
-        # ลองหา rows จากหลาย selector
-        rows = frame.locator("table.list_table tbody tr, table[role='table'] tbody tr, div[role='row']")
-        count = rows.count()
-        print(f"Found {count} rows on page")
+        # Loop through all pages until no more next page button
+        page_number = 1
 
-        for i in range(count):
-            row = rows.nth(i)
+        while True:
+            print(f"\n===== Processing Page {page_number} =====")
 
-            # คลิกที่ Change Number ลิงก์ตัวแรกในแถว
-            link = row.locator("a.linked.formlink").first
-            number = link.inner_text().strip()
-            if not number:
-                continue
+            # ลองหา rows จากหลาย selector
+            rows = frame.locator("table.list_table tbody tr, table[role='table'] tbody tr, div[role='row']")
+            count = rows.count()
+            print(f"Found {count} rows on page {page_number}")
 
-            folder = OUT / safe_name(number)
-            folder.mkdir(parents=True, exist_ok=True)
+            for i in range(count):
+                row = rows.nth(i)
 
-            print(f"\n=== {number} ===")
+                # คลิกที่ Change Number ลิงก์ตัวแรกในแถว
+                link = row.locator("a.linked.formlink").first
+                number = link.inner_text().strip()
+                if not number:
+                    continue
+
+                folder = OUT / safe_name(number)
+                folder.mkdir(parents=True, exist_ok=True)
+
+                print(f"\n=== {number} (Row {i+1}/{count}, Page {page_number}) ===")
 
             # เปิด record ในแท็บเดิม
             link.click()
@@ -417,6 +422,47 @@ def main():
             frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
             page.wait_for_timeout(1000)  # รอให้ตารางโหลดเสร็จ
 
+            # หลังจากประมวลผลทุก row ในหน้านี้แล้ว ตรวจสอบว่ามีปุ่ม Next Page หรือไม่
+            print(f"\nCompleted page {page_number}. Checking for next page...")
+
+            # หาปุ่ม Next Page
+            next_page_btn = frame.locator('button:has(span.icon-vcr-right)').first
+            if next_page_btn.count() == 0:
+                # fallback: หาด้วย span โดยตรงแล้วหา parent button
+                next_page_icon = frame.locator('span.icon-vcr-right').first
+                if next_page_icon.count() > 0:
+                    next_page_btn = next_page_icon.locator('xpath=ancestor::button[1]').first
+                    if next_page_btn.count() == 0:
+                        # อาจเป็น anchor tag
+                        next_page_btn = next_page_icon.locator('xpath=ancestor::a[1]').first
+
+            # ตรวจสอบว่ามีปุ่มและ enabled หรือไม่
+            if next_page_btn.count() > 0:
+                try:
+                    # ตรวจสอบว่าปุ่มไม่ disabled
+                    is_disabled = next_page_btn.get_attribute("disabled")
+                    if is_disabled is None:
+                        print(f"Clicking Next Page button...")
+                        next_page_btn.click()
+                        page.wait_for_timeout(2000)  # รอให้หน้าใหม่โหลด
+
+                        # รอให้ตารางมา
+                        frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
+                        page.wait_for_timeout(1000)
+
+                        page_number += 1
+                        continue  # วนต่อไปยังหน้าถัดไป
+                    else:
+                        print("Next Page button is disabled. Reached last page.")
+                        break
+                except Exception as e:
+                    print(f"[WARN] Failed to click Next Page: {e}")
+                    break
+            else:
+                print("No Next Page button found. Reached last page.")
+                break
+
+        print(f"\n===== Completed! Processed {page_number} page(s) =====")
         browser.close()
 
 if __name__ == "__main__":
