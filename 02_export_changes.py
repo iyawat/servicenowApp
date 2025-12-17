@@ -87,33 +87,35 @@ def main():
             frame.wait_for_selector("form", timeout=60_000)
 
             # ---------- (A) Export PDF ผ่าน UI ----------
-            # จากรูป: เมนู 3 จุด/เมนู context แล้วมี Export > PDF
-            # ใน UI แต่ละ instance ปุ่มอาจต่างกัน ต้องปรับ selector ให้ตรง
+            # Step 1-4: Additional actions menu -> Export -> PDF -> Export button
             try:
-                # เปิดเมนู (มักเป็นปุ่มที่มี label "More options" หรือไอคอนสามจุด)
-                # ลอง 2 แบบ: ปุ่ม "..." หรือ icon menu บน header
-                menu_btn = frame.locator('button[aria-label*="More"]').first
-                if menu_btn.count() == 0:
-                    menu_btn = frame.locator("button:has-text('...')").first
-                if menu_btn.count() == 0:
-                    # บางทีเป็นไอคอนใน header (ไม่อยู่ใน frame)
-                    menu_btn = page.locator('button[aria-label*="More"]').first
+                # Step 1: กดปุ่ม "Additional actions" (icon menu)
+                additional_actions_btn = frame.locator('button.additional-actions-context-menu-button[aria-label="additional actions"]').first
+                if additional_actions_btn.count() == 0:
+                    # ลองหาใน page หลัก (ไม่ใช่ใน frame)
+                    additional_actions_btn = page.locator('button.additional-actions-context-menu-button[aria-label="additional actions"]').first
 
-                menu_btn.click(timeout=5_000)
+                additional_actions_btn.click(timeout=5_000)
+                frame.wait_for_timeout(500)  # รอให้เมนูขึ้น
 
-                # hover/click Export -> PDF
-                # ใช้ selector ตาม element จริง: div.context_item[role="menuitem"]
-                export_menu = frame.locator('div.context_item[role="menuitem"]:has-text("Export")').first
+                # Step 2: Hover และคลิก "Export" menu item
+                export_menu = frame.locator('div.context_item[role="menuitem"][data-context-menu-label="Export"]').first
+                if export_menu.count() == 0:
+                    # fallback: ลองหาด้วย item_id
+                    export_menu = frame.locator('div.context_item[item_id="context_exportmenu"]').first
+
                 export_menu.hover()
                 frame.wait_for_timeout(500)  # รอให้ submenu แสดง
 
-                # คลิก PDF item
+                # Step 3: คลิก "PDF" item
                 pdf_item = frame.locator('div.context_item[role="menuitem"]:has-text("PDF")').first
                 pdf_item.click()
+                frame.wait_for_timeout(1000)  # รอให้ Export dialog ขึ้นมา
 
-                # รอให้ Export dialog ขึ้นมา และกดปุ่ม Export เพื่อยืนยัน
-                frame.wait_for_timeout(1000)
-                export_btn = frame.locator('button#ok_button:has-text("Export")').first
+                # Step 4: กดปุ่ม "Export" ใน dialog เพื่อยืนยัน
+                export_btn = frame.locator('button#ok_button').first
+                if export_btn.count() == 0:
+                    export_btn = page.locator('button#ok_button').first
 
                 with page.expect_download() as dl:
                     export_btn.click()
