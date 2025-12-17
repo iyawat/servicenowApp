@@ -217,8 +217,22 @@ def main():
 
                     if no_attachments_msg.count() > 0:
                         print("No attachments found")
-                        # ปิด dialog
-                        page.keyboard.press("Escape")
+                        # ปิด dialog ด้วยปุ่ม Close
+                        close_btn = frame.locator('button#attachment_closemodal').first
+                        if close_btn.count() == 0:
+                            # fallback: หาด้วย data-dismiss และ class
+                            close_btn = frame.locator('button[data-dismiss="GlideModal"].close').first
+
+                        if close_btn.count() == 0:
+                            # ลองหาใน page หลัก
+                            close_btn = page.locator('button#attachment_closemodal').first
+
+                        if close_btn.count() > 0:
+                            close_btn.click()
+                        else:
+                            # fallback: ใช้ ESC ถ้าหาปุ่มไม่เจอ
+                            page.keyboard.press("Escape")
+
                         frame.wait_for_timeout(500)
                     else:
                         # มี attachments - หาปุ่ม "Download All"
