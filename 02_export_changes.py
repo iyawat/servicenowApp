@@ -222,10 +222,10 @@ def main():
                         frame.wait_for_timeout(1500)
                         print("Opened Supporting Documents tab")
 
-                        # หา attachment links ทั้งหมดในแท็บนี้
-                        print("[DEBUG] Searching for attachment links in Supporting Documents...")
-                        attachment_links = frame.locator('a.attachment').all()
-                        print(f"[DEBUG] Found {len(attachment_links)} attachment link(s)")
+                        # หา attachment download links เท่านั้น (ไม่รวม rename, view buttons)
+                        print("[DEBUG] Searching for download links in Supporting Documents...")
+                        attachment_links = frame.locator('a.attachment[href*="sys_attachment.do"]').all()
+                        print(f"[DEBUG] Found {len(attachment_links)} download link(s)")
 
                         if len(attachment_links) > 0:
                             print(f"Processing {len(attachment_links)} attachment(s) in Supporting Documents")
