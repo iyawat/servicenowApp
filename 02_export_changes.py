@@ -210,33 +210,47 @@ def main():
                     # รอให้ Attachments dialog popup ขึ้นมา
                     frame.wait_for_timeout(2000)
 
-                    # หาปุ่ม "Download All"
-                    download_all_btn = frame.locator('input#download_all_button[value="Download All"]').first
-                    if download_all_btn.count() == 0:
-                        # fallback: หาด้วย onclick
-                        download_all_btn = frame.locator('input[onclick*="downloadAllAttachments"]').first
+                    # ตรวจสอบว่ามีข้อความ "There are no attachments" หรือไม่
+                    no_attachments_msg = frame.locator('text=There are no attachments').first
+                    if no_attachments_msg.count() == 0:
+                        no_attachments_msg = page.locator('text=There are no attachments').first
 
-                    if download_all_btn.count() == 0:
-                        # ลองหาใน page หลัก
-                        download_all_btn = page.locator('input#download_all_button[value="Download All"]').first
-
-                    if download_all_btn.count() > 0:
-                        # สร้างโฟลเดอร์ Attachment
-                        attachment_folder = folder / "Attachment"
-                        attachment_folder.mkdir(parents=True, exist_ok=True)
-
-                        print("Downloading all attachments...")
-                        with page.expect_download() as dl:
-                            download_all_btn.click()
-                        download_file = dl.value
-                        wait_download(download_file, attachment_folder / "attachments_all.zip")
-                        print("Attachments downloaded")
-
+                    if no_attachments_msg.count() > 0:
+                        print("No attachments found")
                         # ปิด dialog
                         page.keyboard.press("Escape")
                         frame.wait_for_timeout(500)
                     else:
-                        print("[WARN] Download All button not found in Attachments dialog")
+                        # มี attachments - หาปุ่ม "Download All"
+                        download_all_btn = frame.locator('input#download_all_button[value="Download All"]').first
+                        if download_all_btn.count() == 0:
+                            # fallback: หาด้วย onclick
+                            download_all_btn = frame.locator('input[onclick*="downloadAllAttachments"]').first
+
+                        if download_all_btn.count() == 0:
+                            # ลองหาใน page หลัก
+                            download_all_btn = page.locator('input#download_all_button[value="Download All"]').first
+
+                        if download_all_btn.count() > 0:
+                            # สร้างโฟลเดอร์ Attachment
+                            attachment_folder = folder / "Attachment"
+                            attachment_folder.mkdir(parents=True, exist_ok=True)
+
+                            print("Downloading all attachments...")
+                            with page.expect_download() as dl:
+                                download_all_btn.click()
+                            download_file = dl.value
+                            wait_download(download_file, attachment_folder / "attachments_all.zip")
+                            print("Attachments downloaded")
+
+                            # ปิด dialog
+                            page.keyboard.press("Escape")
+                            frame.wait_for_timeout(500)
+                        else:
+                            print("[WARN] Download All button not found in Attachments dialog")
+                            # ปิด dialog
+                            page.keyboard.press("Escape")
+                            frame.wait_for_timeout(500)
                 else:
                     print("[INFO] No attachments button found (may not have attachments)")
 
