@@ -323,7 +323,10 @@ def main():
                             print("Downloading all attachments...")
                             # ใช้ JavaScript click เพราะปุ่มอาจจะไม่ visible
                             with page.expect_download() as dl:
-                                page.evaluate("document.getElementById('download_all_button').click()")
+                                page.evaluate("""
+                                    const btn = document.getElementById('download_all_button');
+                                    if (btn) btn.click();
+                                """)
                             download_file = dl.value
                             wait_download(download_file, attachment_folder / "attachments_all.zip")
                             print("Attachments downloaded")
