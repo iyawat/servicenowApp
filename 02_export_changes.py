@@ -29,18 +29,37 @@ def main():
         # เข้า list
         page.goto(CHANGE_LIST_URL, wait_until="domcontentloaded")
 
+        # รอให้หน้าโหลดเสร็จ
+        page.wait_for_timeout(3000)
+
         # ServiceNow classic list มักอยู่ใน iframe: gsft_main
         # ถ้าไม่ใช่ classic ให้เอา frame logic ออก
-        frame = page.frame(name="gsft_main") or page
+        gsft_frame = page.frame(name="gsft_main")
+        if gsft_frame:
+            print("Found gsft_main iframe (Classic UI)")
+            frame = gsft_frame
+        else:
+            print("No gsft_main iframe (Modern UI or direct page)")
+            frame = page
 
-        # รอให้ตารางมา
-        frame.wait_for_selector("table.list_table", timeout=60_000)
+        # รอให้ตารางมา - ลองหลาย selector
+        print("Waiting for table to load...")
+        try:
+            # ลอง selector หลายแบบ
+            frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
+            print("Table found!")
+        except Exception as e:
+            print(f"[ERROR] Cannot find table. Current URL: {page.url}")
+            print("Taking screenshot for debug...")
+            page.screenshot(path="debug_list_page.png")
+            raise
 
         # ดึง link ของ change number ในหน้าปัจจุบัน
         # (ถ้าต้องการหลายหน้า ให้ทำ pagination เพิ่ม)
-        rows = frame.locator("table.list_table tbody tr")
+        # ลองหา rows จากหลาย selector
+        rows = frame.locator("table.list_table tbody tr, table[role='table'] tbody tr, div[role='row']")
         count = rows.count()
-        print(f"Found rows on page: {count}")
+        print(f"Found {count} rows on page")
 
         for i in range(count):
             row = rows.nth(i)
@@ -228,7 +247,9 @@ def main():
             # กลับไป list (ปุ่ม back ของ browser)
             page.go_back()
             frame = page.frame(name="gsft_main") or page
-            frame.wait_for_selector("table.list_table", timeout=60_000)
+            # รอให้กลับไปหน้า list
+            frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
+            page.wait_for_timeout(1000)  # รอให้ตารางโหลดเสร็จ
 
         browser.close()
 
