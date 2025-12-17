@@ -87,7 +87,7 @@ def main():
             frame.wait_for_selector("form", timeout=60_000)
 
             # ---------- (A) Export PDF ผ่าน UI ----------
-            # Step 1-4: Additional actions menu -> Export -> PDF -> Export button
+            # Step 1-5: Additional actions -> Export -> PDF -> Export -> Download
             try:
                 # Step 1: กดปุ่ม "Additional actions" (icon menu)
                 additional_actions_btn = frame.locator('button.additional-actions-context-menu-button[aria-label="additional actions"]').first
@@ -112,13 +112,27 @@ def main():
                 pdf_item.click()
                 frame.wait_for_timeout(1000)  # รอให้ Export dialog ขึ้นมา
 
-                # Step 4: กดปุ่ม "Export" ใน dialog เพื่อยืนยัน
+                # Step 4: กดปุ่ม "Export" ใน dialog เพื่อเริ่ม generate PDF
                 export_btn = frame.locator('button#ok_button').first
                 if export_btn.count() == 0:
                     export_btn = page.locator('button#ok_button').first
 
+                export_btn.click()
+                print("Generating PDF...")
+
+                # รอให้ PDF generation เสร็จ และปุ่ม Download ปรากฏ
+                frame.wait_for_timeout(3000)  # รอให้ process PDF
+
+                # Step 5: กดปุ่ม "Download" เพื่อดาวน์โหลด PDF
+                download_btn = frame.locator('button#download_button').first
+                if download_btn.count() == 0:
+                    download_btn = page.locator('button#download_button').first
+
+                # รอให้ปุ่ม Download พร้อม
+                download_btn.wait_for(state="visible", timeout=30_000)
+
                 with page.expect_download() as dl:
-                    export_btn.click()
+                    download_btn.click()
                 download = dl.value
                 wait_download(download, folder / f"{safe_name(number)}.pdf")
                 print("PDF saved")
@@ -126,32 +140,34 @@ def main():
                 print(f"[WARN] Export PDF failed: {e}")
 
             # ---------- (B) Download attachments จาก paperclip ----------
-            # ถ้ากด paperclip แล้วมีปุ่ม Download All ให้ใช้เลย
-            try:
-                # บาง UI paperclip เป็นไอคอนบน form header
-                clip = frame.locator('button[aria-label*="Attachment"], a[aria-label*="Attachment"]').first
-                if clip.count() == 0:
-                    clip = frame.locator("span.icon-paperclip").first
-
-                if clip.count() > 0:
-                    clip.click()
-
-                    # modal attachments
-                    # รอให้ปุ่ม Download All โผล่
-                    frame.wait_for_timeout(1000)
-
-                    # ถ้า Download All เป็น “download” ไฟล์เดียว (zip) จะจับด้วย expect_download
-                    dlall = frame.get_by_text("Download All")
-                    if dlall.count() > 0:
-                        with page.expect_download() as dl2:
-                            dlall.click()
-                        download2 = dl2.value
-                        wait_download(download2, folder / "attachments_download_all.zip")
-                        print("Attachments Download All saved")
-            except Exception as e:
-                print(f"[WARN] Paperclip download failed: {e}")
+            # DISABLED: Focus on PDF export first
+            # try:
+            #     # บาง UI paperclip เป็นไอคอนบน form header
+            #     clip = frame.locator('button[aria-label*="Attachment"], a[aria-label*="Attachment"]').first
+            #     if clip.count() == 0:
+            #         clip = frame.locator("span.icon-paperclip").first
+            #
+            #     if clip.count() > 0:
+            #         clip.click()
+            #
+            #         # modal attachments
+            #         # รอให้ปุ่ม Download All โผล่
+            #         frame.wait_for_timeout(1000)
+            #
+            #         # ถ้า Download All เป็น "download" ไฟล์เดียว (zip) จะจับด้วย expect_download
+            #         dlall = frame.get_by_text("Download All")
+            #         if dlall.count() > 0:
+            #             with page.expect_download() as dl2:
+            #                 dlall.click()
+            #             download2 = dl2.value
+            #             wait_download(download2, folder / "attachments_download_all.zip")
+            #             print("Attachments Download All saved")
+            # except Exception as e:
+            #     print(f"[WARN] Paperclip download failed: {e}")
 
             # ---------- (C) Supporting Documents tab ----------
+            # DISABLED: Focus on PDF export first
+            """
             # ในรูปมี UAT SignOff / App Scan / CR File Attachment (เป็น link Click to add...)
             # ดาวน์โหลดไฟล์แนบจากแต่ละ field ใน Supporting Documents
             try:
@@ -260,6 +276,7 @@ def main():
 
             except Exception as e:
                 print(f"[WARN] Supporting Documents handling skipped: {e}")
+            """
 
             # กลับไป list (ปุ่ม back ของ browser)
             page.go_back()
