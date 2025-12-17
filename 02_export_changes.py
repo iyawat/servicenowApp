@@ -213,7 +213,7 @@ def main():
                 except Exception as e:
                     print(f"[WARN] Export PDF failed: {e}")
 
-                # ---------- (D) Download UAT Signoff from Supporting Documents ----------
+                # ---------- (D) Download from Supporting Documents (CRFile, UAT Signoff, AppScan) ----------
                 try:
                     # คลิกแท็บ "Supporting Documents"
                     supporting_docs_tab = frame.locator('span.tab_caption_text:has-text("Supporting Documents")').first
@@ -222,48 +222,61 @@ def main():
                         frame.wait_for_timeout(1500)
                         print("Opened Supporting Documents tab")
 
-                        # หา UAT Signoff attachment field
-                        uat_input = frame.locator('input#attachment\\.change_request\\.u_file_attachment_2[type="hidden"]').first
+                        # กำหนด mapping ระหว่าง field name กับ subfolder
+                        attachment_fields = {
+                            'u_file_attachment_1': 'CRFile',
+                            'u_file_attachment_2': 'UAT Signoff',
+                            'u_file_attachment_3': 'AppScan'
+                        }
 
-                        if uat_input.count() > 0:
-                            # ได้ sys_id ของ attachment
-                            sys_id = uat_input.get_attribute("value")
+                        # วนลูปดาวน์โหลดแต่ละประเภท
+                        for field_name, subfolder_name in attachment_fields.items():
+                            try:
+                                # หา input field ที่เก็บ sys_id
+                                input_selector = f'input#attachment\\.change_request\\.{field_name}[type="hidden"]'
+                                file_input = frame.locator(input_selector).first
 
-                            if sys_id and sys_id.strip():
-                                print(f"Found UAT Signoff attachment (sys_id: {sys_id})")
+                                if file_input.count() > 0:
+                                    sys_id = file_input.get_attribute("value")
 
-                                # สร้างโฟลเดอร์ UAT Signoff
-                                uat_folder = folder / "UAT Signoff"
-                                uat_folder.mkdir(parents=True, exist_ok=True)
+                                    if sys_id and sys_id.strip():
+                                        print(f"Found {subfolder_name} attachment (sys_id: {sys_id})")
 
-                                # ดาวน์โหลดโดยใช้ sys_id - หา download link โดยตรง
-                                # หา link ที่มี class="attachment" และ href="sys_attachment.do?sys_id=..."
-                                download_link = frame.locator(f'a.attachment[id="{sys_id}"]').first
+                                        # สร้างโฟลเดอร์
+                                        subfolder = folder / subfolder_name
+                                        subfolder.mkdir(parents=True, exist_ok=True)
 
-                                if download_link.count() == 0:
-                                    # fallback: หาด้วย href
-                                    download_link = frame.locator(f'a.attachment[href*="{sys_id}"]').first
+                                        # หา download link โดยตรง
+                                        download_link = frame.locator(f'a.attachment[id="{sys_id}"]').first
 
-                                if download_link.count() > 0:
-                                    filename = download_link.inner_text().strip() or "uat_signoff.eml"
-                                    print(f"Downloading: {filename}")
+                                        if download_link.count() == 0:
+                                            # fallback: หาด้วย href
+                                            download_link = frame.locator(f'a.attachment[href*="{sys_id}"]').first
 
-                                    with page.expect_download() as dl:
-                                        download_link.click()
-                                    download_file = dl.value
-                                    wait_download(download_file, uat_folder / safe_name(filename))
-                                    print(f"UAT Signoff downloaded: {filename}")
+                                        if download_link.count() > 0:
+                                            filename = download_link.inner_text().strip() or f"{subfolder_name.lower().replace(' ', '_')}_file"
+                                            print(f"Downloading {subfolder_name}: {filename}")
+
+                                            with page.expect_download() as dl:
+                                                download_link.click()
+                                            download_file = dl.value
+                                            wait_download(download_file, subfolder / safe_name(filename))
+                                            print(f"✓ {subfolder_name} downloaded: {filename}")
+                                        else:
+                                            print(f"[WARN] {subfolder_name}: Download link not found")
+                                    else:
+                                        print(f"{subfolder_name} not found (empty sys_id)")
                                 else:
-                                    print("[WARN] UAT Signoff: Download link not found")
-                            else:
-                                print("UAT not found (empty sys_id)")
-                        else:
-                            print("UAT not found")
+                                    print(f"{subfolder_name} not found")
+
+                            except Exception as e:
+                                print(f"[WARN] {subfolder_name} download failed: {e}")
+
                     else:
                         print("[WARN] Supporting Documents tab not found")
 
                 except Exception as e:
-                    print(f"[WARN] UAT Signoff download failed: {e}")
+                    print(f"[WARN] Supporting Documents processing failed: {e}")
 
                 # ---------- (E) Download All Attachments ----------
                 try:
