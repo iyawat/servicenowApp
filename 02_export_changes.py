@@ -222,55 +222,52 @@ def main():
                         frame.wait_for_timeout(1500)
                         print("Opened Supporting Documents tab")
 
-                        # กำหนด mapping ระหว่าง field name กับ subfolder
-                        attachment_fields = {
-                            'u_file_attachment_1': 'CRFile',
-                            'u_file_attachment_2': 'UAT Signoff',
-                            'u_file_attachment_3': 'AppScan'
-                        }
+                        # หา attachment links ทั้งหมดในแท็บนี้
+                        attachment_links = frame.locator('a.attachment').all()
 
-                        # วนลูปดาวน์โหลดแต่ละประเภท
-                        for field_name, subfolder_name in attachment_fields.items():
-                            try:
-                                # หา input field ที่เก็บ sys_id
-                                input_selector = f'input#attachment\\.change_request\\.{field_name}[type="hidden"]'
-                                file_input = frame.locator(input_selector).first
+                        if len(attachment_links) > 0:
+                            print(f"Found {len(attachment_links)} attachment(s) in Supporting Documents")
 
-                                if file_input.count() > 0:
-                                    sys_id = file_input.get_attribute("value")
+                            for link in attachment_links:
+                                try:
+                                    # ดึงชื่อไฟล์
+                                    filename = link.inner_text().strip()
+                                    if not filename:
+                                        continue
 
-                                    if sys_id and sys_id.strip():
-                                        print(f"Found {subfolder_name} attachment (sys_id: {sys_id})")
+                                    # ตัดสินใจ subfolder จากชื่อไฟล์
+                                    filename_upper = filename.upper()
+                                    filename_lower = filename.lower()
 
-                                        # สร้างโฟลเดอร์
-                                        subfolder = folder / subfolder_name
-                                        subfolder.mkdir(parents=True, exist_ok=True)
-
-                                        # หา download link โดยตรง
-                                        download_link = frame.locator(f'a.attachment[id="{sys_id}"]').first
-
-                                        if download_link.count() == 0:
-                                            # fallback: หาด้วย href
-                                            download_link = frame.locator(f'a.attachment[href*="{sys_id}"]').first
-
-                                        if download_link.count() > 0:
-                                            filename = download_link.inner_text().strip() or f"{subfolder_name.lower().replace(' ', '_')}_file"
-                                            print(f"Downloading {subfolder_name}: {filename}")
-
-                                            with page.expect_download() as dl:
-                                                download_link.click()
-                                            download_file = dl.value
-                                            wait_download(download_file, subfolder / safe_name(filename))
-                                            print(f"✓ {subfolder_name} downloaded: {filename}")
-                                        else:
-                                            print(f"[WARN] {subfolder_name}: Download link not found")
+                                    if 'UAT' in filename_upper or 'SIGNOFF' in filename_upper:
+                                        subfolder_name = 'UAT Signoff'
+                                    elif 'APP SCAN' in filename_upper or 'APPSCAN' in filename_upper or 'app scan' in filename_lower:
+                                        subfolder_name = 'AppScan'
+                                    elif filename.startswith('RE') or 'SDR' in filename_upper or 'FORM' in filename_upper:
+                                        subfolder_name = 'CRFile'
                                     else:
-                                        print(f"{subfolder_name} not found (empty sys_id)")
-                                else:
-                                    print(f"{subfolder_name} not found")
+                                        subfolder_name = 'Supporting Documents'
 
-                            except Exception as e:
-                                print(f"[WARN] {subfolder_name} download failed: {e}")
+                                    # สร้างโฟลเดอร์
+                                    subfolder = folder / subfolder_name
+                                    subfolder.mkdir(parents=True, exist_ok=True)
+
+                                    # ดาวน์โหลด
+                                    print(f"Downloading {subfolder_name}: {filename}")
+
+                                    with page.expect_download() as dl:
+                                        link.click()
+                                    download_file = dl.value
+                                    wait_download(download_file, subfolder / safe_name(filename))
+                                    print(f"✓ {subfolder_name} downloaded: {filename}")
+
+                                    # รอสักครู่หลัง download แต่ละไฟล์
+                                    frame.wait_for_timeout(500)
+
+                                except Exception as e:
+                                    print(f"[WARN] Could not download {filename}: {e}")
+                        else:
+                            print("No attachments found in Supporting Documents")
 
                     else:
                         print("[WARN] Supporting Documents tab not found")
