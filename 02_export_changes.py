@@ -99,9 +99,14 @@ def main():
                 menu_btn.click(timeout=5_000)
 
                 # hover/click Export -> PDF
-                frame.get_by_text("Export", exact=True).hover()
+                # ใช้ selector ตาม element จริง: div.context_item[role="menuitem"]
+                export_menu = frame.locator('div.context_item[role="menuitem"]:has-text("Export")').first
+                export_menu.hover()
+                frame.wait_for_timeout(500)  # รอให้ submenu แสดง
+
                 with page.expect_download() as dl:
-                    frame.get_by_text("PDF", exact=True).click()
+                    pdf_item = frame.locator('div.context_item[role="menuitem"]:has-text("PDF")').first
+                    pdf_item.click()
                 download = dl.value
                 wait_download(download, folder / f"{safe_name(number)}.pdf")
                 print("PDF saved")
