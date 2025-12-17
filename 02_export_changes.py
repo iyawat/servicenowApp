@@ -498,10 +498,18 @@ def main():
             # หลังจากประมวลผลทุก row ในหน้านี้แล้ว ตรวจสอบว่ามีปุ่ม Next Page หรือไม่
             print(f"\nCompleted page {page_number}. Checking for next page...")
 
-            # หาปุ่ม Next Page
-            next_page_btn = frame.locator('button:has(span.icon-vcr-right)').first
+            # หาปุ่ม Next Page - ใช้ selector ที่แม่นยำกว่า
+            next_page_btn = frame.locator('button[name="vcr_next"]').first
             if next_page_btn.count() == 0:
-                # fallback: หาด้วย span โดยตรงแล้วหา parent button
+                # fallback 1: หาด้วย aria-label
+                next_page_btn = frame.locator('button[aria-label="Next page"]').first
+
+            if next_page_btn.count() == 0:
+                # fallback 2: หาด้วย span icon
+                next_page_btn = frame.locator('button:has(span.icon-vcr-right)').first
+
+            if next_page_btn.count() == 0:
+                # fallback 3: หาด้วย span โดยตรงแล้วหา parent button
                 next_page_icon = frame.locator('span.icon-vcr-right').first
                 if next_page_icon.count() > 0:
                     next_page_btn = next_page_icon.locator('xpath=ancestor::button[1]').first
@@ -515,9 +523,28 @@ def main():
                     # ตรวจสอบว่าปุ่มไม่ disabled
                     is_disabled = next_page_btn.get_attribute("disabled")
                     if is_disabled is None:
+                        print(f"Found Next Page button, scrolling into view...")
+
+                        # Scroll ให้ปุ่มเข้ามาในมุมมอง
+                        next_page_btn.scroll_into_view_if_needed()
+                        frame.wait_for_timeout(500)
+
+                        # รอให้ปุ่ม visible
+                        try:
+                            next_page_btn.wait_for(state="visible", timeout=5_000)
+                        except Exception as e:
+                            print(f"Next Page button not visible, trying to continue anyway...")
+
                         print(f"Clicking Next Page button...")
-                        next_page_btn.click()
-                        page.wait_for_timeout(2000)  # รอให้หน้าใหม่โหลด
+
+                        # ลอง click โดยใช้ force=True ถ้าจำเป็น
+                        try:
+                            next_page_btn.click(timeout=10_000)
+                        except Exception as e:
+                            print(f"Normal click failed, trying force click...")
+                            next_page_btn.click(force=True)
+
+                        page.wait_for_timeout(3000)  # เพิ่มเวลารอให้หน้าใหม่โหลด
 
                         # รอให้ตารางมา
                         frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
