@@ -104,9 +104,16 @@ def main():
                 export_menu.hover()
                 frame.wait_for_timeout(500)  # รอให้ submenu แสดง
 
+                # คลิก PDF item
+                pdf_item = frame.locator('div.context_item[role="menuitem"]:has-text("PDF")').first
+                pdf_item.click()
+
+                # รอให้ Export dialog ขึ้นมา และกดปุ่ม Export เพื่อยืนยัน
+                frame.wait_for_timeout(1000)
+                export_btn = frame.locator('button#ok_button:has-text("Export")').first
+
                 with page.expect_download() as dl:
-                    pdf_item = frame.locator('div.context_item[role="menuitem"]:has-text("PDF")').first
-                    pdf_item.click()
+                    export_btn.click()
                 download = dl.value
                 wait_download(download, folder / f"{safe_name(number)}.pdf")
                 print("PDF saved")
