@@ -2,10 +2,10 @@ from playwright.sync_api import sync_playwright
 from pathlib import Path
 
 ## DEV
-BASE = "https://seicthdev.service-now.com"
+# BASE = "https://seicthdev.service-now.com"
 
 #PRD
-# BASE = "https://seicth.service-now.com/"
+BASE = "https://seicth.service-now.com/"
 
 STATE = Path("state.json")
 

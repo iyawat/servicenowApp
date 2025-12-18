@@ -2,7 +2,12 @@ import re
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-BASE = "https://seicthdev.service-now.com"
+## DEV
+# BASE = "https://seicthdev.service-now.com"
+
+#PRD
+BASE = "https://seicth.service-now.com/"
+
 STATE = "state.json"
 OUT = Path("output")
 DOWNLOADED_LOG = Path("downloaded.log")  # Log file to track completed downloads
