@@ -89,6 +89,19 @@ def main():
             page.screenshot(path="debug_list_page.png")
             raise
 
+        # คลิกเรียง CAB Date เพื่อให้ download เรียงตามวันที่ใหม่ก่อน
+        try:
+            print("Sorting by CAB Date (newest first)...")
+            cab_date_header = frame.locator('a.column_head:has-text("CAB Date")').first
+            if cab_date_header.count() > 0:
+                cab_date_header.click()
+                frame.wait_for_timeout(2000)  # รอให้เรียงเสร็จ
+                print("Sorted by CAB Date")
+            else:
+                print("[WARN] CAB Date column not found - skipping sort")
+        except Exception as e:
+            print(f"[WARN] Could not sort by CAB Date: {e}")
+
         # ดึง link ของ change number ในหน้าปัจจุบัน
         # Loop through all pages until no more next page button
         page_number = 1
@@ -153,30 +166,39 @@ def main():
                     print("Clicked Additional actions button")
 
                     # รอให้เมนูแสดงและ stable
-                    frame.wait_for_timeout(1500)  # เพิ่มเวลารอจาก 500ms เป็น 1.5s
+                    frame.wait_for_timeout(2000)  # เพิ่มเวลารอให้มากขึ้น
 
                     # Step 2: รอให้ Export menu แสดงก่อนที่จะ hover
                     export_menu = None
                     for attempt in range(3):  # ลอง 3 ครั้ง
                         try:
-                            # ลองหา Export menu item
+                            # ลองหา Export menu item ทั้งใน frame และ page context
                             export_menu = frame.locator('div.context_item[role="menuitem"][data-context-menu-label="Export"]').first
                             if export_menu.count() == 0:
-                                # fallback: ลองหาด้วย item_id
+                                # fallback 1: ลองหาด้วย item_id ใน frame
                                 export_menu = frame.locator('div.context_item[item_id="context_exportmenu"]').first
+
+                            if export_menu.count() == 0:
+                                # fallback 2: ลองหาใน page context
+                                export_menu = page.locator('div.context_item[role="menuitem"][data-context-menu-label="Export"]').first
+
+                            if export_menu.count() == 0:
+                                # fallback 3: ลองหาด้วย item_id ใน page context
+                                export_menu = page.locator('div.context_item[item_id="context_exportmenu"]').first
 
                             if export_menu.count() > 0:
                                 # รอให้ visible
                                 export_menu.wait_for(state="visible", timeout=5_000)
+                                print(f"[DEBUG] Found Export menu (attempt {attempt+1})")
                                 break
                             else:
                                 if attempt < 2:
                                     print(f"Export menu not found, retrying... (attempt {attempt+1}/3)")
-                                    frame.wait_for_timeout(1000)
+                                    frame.wait_for_timeout(1500)  # เพิ่มเวลารอระหว่าง retry
                         except Exception as e:
                             if attempt < 2:
-                                print(f"Error waiting for Export menu, retrying... (attempt {attempt+1}/3)")
-                                frame.wait_for_timeout(1000)
+                                print(f"Error waiting for Export menu, retrying... (attempt {attempt+1}/3): {e}")
+                                frame.wait_for_timeout(1500)
                             else:
                                 raise
 
@@ -326,12 +348,36 @@ def main():
                             attachment_folder.mkdir(parents=True, exist_ok=True)
 
                             print("Downloading all attachments...")
-                            # ใช้ JavaScript click เพราะปุ่มอาจจะไม่ visible
-                            with page.expect_download() as dl:
-                                page.evaluate("document.getElementById('download_all_button').click()")
-                            download_file = dl.value
-                            wait_download(download_file, attachment_folder / "attachments_all.zip")
-                            print("Attachments downloaded")
+
+                            # ลอง JavaScript click ก่อน (เพราะปุ่มอาจไม่ visible)
+                            try:
+                                # เช็คว่า JavaScript หาปุ่มเจอหรือไม่
+                                btn_found = page.evaluate("""
+                                    () => {
+                                        const btn = document.getElementById('download_all_button');
+                                        return btn !== null;
+                                    }
+                                """)
+
+                                if btn_found:
+                                    print("[DEBUG] JavaScript found button, clicking...")
+                                    with page.expect_download() as dl:
+                                        page.evaluate("document.getElementById('download_all_button').click()")
+                                    download_file = dl.value
+                                    wait_download(download_file, attachment_folder / "attachments_all.zip")
+                                    print("Attachments downloaded")
+                                else:
+                                    # JavaScript ไม่เจอ ลอง Playwright force click
+                                    print("[DEBUG] JavaScript didn't find button, trying Playwright force click...")
+                                    with page.expect_download() as dl:
+                                        download_all_btn.click(force=True, timeout=10_000)
+                                    download_file = dl.value
+                                    wait_download(download_file, attachment_folder / "attachments_all.zip")
+                                    print("Attachments downloaded")
+
+                            except Exception as e:
+                                print(f"[WARN] Could not download attachments: {e}")
+                                # ถ้า download ไม่สำเร็จก็ข้าม
 
                             # ปิด dialog ด้วยปุ่ม Close
                             print("[DEBUG] Closing Attachments dialog...")
