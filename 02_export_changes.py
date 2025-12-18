@@ -301,29 +301,35 @@ def main():
 
                         # ลองหาใน page หลักก่อน (modal อาจจะอยู่นอก frame)
                         download_all_btn = page.locator('input#download_all_button').first
+                        btn_context = None  # จำ context ที่เจอปุ่ม
+
                         if download_all_btn.count() > 0:
                             print("[DEBUG] Found Download All button in page context")
+                            btn_context = page
                         else:
                             # ลองหาใน frame
                             download_all_btn = frame.locator('input#download_all_button').first
                             if download_all_btn.count() > 0:
                                 print("[DEBUG] Found Download All button in frame context")
+                                btn_context = frame
 
                         if download_all_btn.count() == 0:
                             # fallback: หาด้วย onclick
                             download_all_btn = page.locator('input[onclick*="downloadAllAttachments"]').first
                             if download_all_btn.count() > 0:
                                 print("[DEBUG] Found Download All button by onclick attribute")
+                                btn_context = page
 
-                        if download_all_btn.count() > 0:
+                        if download_all_btn.count() > 0 and btn_context:
                             # สร้างโฟลเดอร์ Attachment
                             attachment_folder = folder / "Attachment"
                             attachment_folder.mkdir(parents=True, exist_ok=True)
 
                             print("Downloading all attachments...")
                             # ใช้ JavaScript click เพราะปุ่มอาจจะไม่ visible
+                            # ใช้ context ที่ถูกต้อง (page หรือ frame)
                             with page.expect_download() as dl:
-                                page.evaluate("""
+                                btn_context.evaluate("""
                                     const btn = document.getElementById('download_all_button');
                                     if (btn) btn.click();
                                 """)
