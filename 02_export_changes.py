@@ -326,16 +326,36 @@ def main():
                             attachment_folder.mkdir(parents=True, exist_ok=True)
 
                             print("Downloading all attachments...")
-                            # ใช้ JavaScript click เพราะปุ่มอาจจะไม่ visible
-                            # ใช้ context ที่ถูกต้อง (page หรือ frame)
-                            with page.expect_download() as dl:
-                                btn_context.evaluate("""
-                                    const btn = document.getElementById('download_all_button');
-                                    if (btn) btn.click();
+
+                            # ลอง JavaScript click ก่อน (เพราะปุ่มอาจไม่ visible)
+                            try:
+                                # เช็คว่า JavaScript หาปุ่มเจอหรือไม่
+                                btn_found = btn_context.evaluate("""
+                                    () => {
+                                        const btn = document.getElementById('download_all_button');
+                                        return btn !== null;
+                                    }
                                 """)
-                            download_file = dl.value
-                            wait_download(download_file, attachment_folder / "attachments_all.zip")
-                            print("Attachments downloaded")
+
+                                if btn_found:
+                                    print("[DEBUG] JavaScript found button, clicking...")
+                                    with page.expect_download() as dl:
+                                        btn_context.evaluate("document.getElementById('download_all_button').click()")
+                                    download_file = dl.value
+                                    wait_download(download_file, attachment_folder / "attachments_all.zip")
+                                    print("Attachments downloaded")
+                                else:
+                                    # JavaScript ไม่เจอ ลอง Playwright force click
+                                    print("[DEBUG] JavaScript didn't find button, trying Playwright force click...")
+                                    with page.expect_download() as dl:
+                                        download_all_btn.click(force=True, timeout=10_000)
+                                    download_file = dl.value
+                                    wait_download(download_file, attachment_folder / "attachments_all.zip")
+                                    print("Attachments downloaded")
+
+                            except Exception as e:
+                                print(f"[WARN] Could not download attachments: {e}")
+                                # ถ้า download ไม่สำเร็จก็ข้าม
 
                             # ปิด dialog ด้วยปุ่ม Close
                             print("[DEBUG] Closing Attachments dialog...")
