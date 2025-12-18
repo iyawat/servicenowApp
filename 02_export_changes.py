@@ -84,6 +84,19 @@ def main():
             page.screenshot(path="debug_list_page.png")
             raise
 
+        # คลิกเรียง CAB Date เพื่อให้ download เรียงตามวันที่ใหม่ก่อน
+        try:
+            print("Sorting by CAB Date (newest first)...")
+            cab_date_header = frame.locator('a.column_head:has-text("CAB Date")').first
+            if cab_date_header.count() > 0:
+                cab_date_header.click()
+                frame.wait_for_timeout(2000)  # รอให้เรียงเสร็จ
+                print("Sorted by CAB Date")
+            else:
+                print("[WARN] CAB Date column not found - skipping sort")
+        except Exception as e:
+            print(f"[WARN] Could not sort by CAB Date: {e}")
+
         # ดึง link ของ change number ในหน้าปัจจุบัน
         # Loop through all pages until no more next page button
         page_number = 1
