@@ -2,12 +2,7 @@ import re
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-## DEV
 BASE = "https://seicthdev.service-now.com"
-
-#PRD
-# BASE = "https://seicth.service-now.com/"
-
 STATE = "state.json"
 OUT = Path("output")
 DOWNLOADED_LOG = Path("downloaded.log")  # Log file to track completed downloads
@@ -326,19 +321,35 @@ def main():
                             attachment_folder.mkdir(parents=True, exist_ok=True)
 
                             print("Downloading all attachments...")
+                            # ใช้ JavaScript click เพราะปุ่มอาจจะไม่ visible
                             with page.expect_download() as dl:
-                                download_all_btn.click()
+                                page.evaluate("document.getElementById('download_all_button').click()")
                             download_file = dl.value
                             wait_download(download_file, attachment_folder / "attachments_all.zip")
                             print("Attachments downloaded")
 
-                            # ปิด dialog
-                            page.keyboard.press("Escape")
+                            # ปิด dialog ด้วยปุ่ม Close
+                            print("[DEBUG] Closing Attachments dialog...")
+                            close_btn = page.locator('button#attachment_closemodal').first
+                            if close_btn.count() == 0:
+                                close_btn = frame.locator('button#attachment_closemodal').first
+                            if close_btn.count() > 0:
+                                close_btn.click()
+                            else:
+                                # fallback: ใช้ ESC ถ้าหาปุ่มไม่เจอ
+                                page.keyboard.press("Escape")
                             frame.wait_for_timeout(500)
                         else:
-                            print("[WARN] Download All button not found in Attachments dialog")
-                            # ปิด dialog
-                            page.keyboard.press("Escape")
+                            print("[INFO] No attachments or Download All button not found - closing dialog")
+                            # ปิด dialog ด้วยปุ่ม Close
+                            close_btn = page.locator('button#attachment_closemodal').first
+                            if close_btn.count() == 0:
+                                close_btn = frame.locator('button#attachment_closemodal').first
+                            if close_btn.count() > 0:
+                                close_btn.click()
+                            else:
+                                # fallback: ใช้ ESC ถ้าหาปุ่มไม่เจอ
+                                page.keyboard.press("Escape")
                             frame.wait_for_timeout(500)
                     else:
                         print("[INFO] No attachments button found (may not have attachments)")
