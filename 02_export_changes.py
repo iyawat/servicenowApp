@@ -301,26 +301,21 @@ def main():
 
                         # ลองหาใน page หลักก่อน (modal อาจจะอยู่นอก frame)
                         download_all_btn = page.locator('input#download_all_button').first
-                        btn_context = None  # จำ context ที่เจอปุ่ม
-
                         if download_all_btn.count() > 0:
                             print("[DEBUG] Found Download All button in page context")
-                            btn_context = page
                         else:
                             # ลองหาใน frame
                             download_all_btn = frame.locator('input#download_all_button').first
                             if download_all_btn.count() > 0:
                                 print("[DEBUG] Found Download All button in frame context")
-                                btn_context = frame
 
                         if download_all_btn.count() == 0:
                             # fallback: หาด้วย onclick
                             download_all_btn = page.locator('input[onclick*="downloadAllAttachments"]').first
                             if download_all_btn.count() > 0:
                                 print("[DEBUG] Found Download All button by onclick attribute")
-                                btn_context = page
 
-                        if download_all_btn.count() > 0 and btn_context:
+                        if download_all_btn.count() > 0:
                             # สร้างโฟลเดอร์ Attachment
                             attachment_folder = folder / "Attachment"
                             attachment_folder.mkdir(parents=True, exist_ok=True)
@@ -330,7 +325,7 @@ def main():
                             # ลอง JavaScript click ก่อน (เพราะปุ่มอาจไม่ visible)
                             try:
                                 # เช็คว่า JavaScript หาปุ่มเจอหรือไม่
-                                btn_found = btn_context.evaluate("""
+                                btn_found = page.evaluate("""
                                     () => {
                                         const btn = document.getElementById('download_all_button');
                                         return btn !== null;
@@ -340,7 +335,7 @@ def main():
                                 if btn_found:
                                     print("[DEBUG] JavaScript found button, clicking...")
                                     with page.expect_download() as dl:
-                                        btn_context.evaluate("document.getElementById('download_all_button').click()")
+                                        page.evaluate("document.getElementById('download_all_button').click()")
                                     download_file = dl.value
                                     wait_download(download_file, attachment_folder / "attachments_all.zip")
                                     print("Attachments downloaded")
