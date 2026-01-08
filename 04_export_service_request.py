@@ -99,28 +99,11 @@ def main():
             print(f"Found {count} rows on page {page_number}")
 
             for i in range(count):
-                # Re-fetch rows each time to avoid stale element after go_back
-                rows = frame.locator("table.list_table tbody tr, table[role='table'] tbody tr, div[role='row']")
                 row = rows.nth(i)
 
-                # คลิกที่ RITM Number ลิงก์ตัวแรกในแถว - retry if stale
-                number = None
-                for attempt in range(3):
-                    try:
-                        link = row.locator("a.linked.formlink").first
-                        number = link.inner_text(timeout=10_000).strip()
-                        if number:
-                            break
-                    except Exception as e:
-                        if attempt < 2:
-                            print(f"[WARN] Failed to get RITM number (attempt {attempt+1}/3): {e}")
-                            frame.wait_for_timeout(1000)
-                            # Re-fetch row
-                            rows = frame.locator("table.list_table tbody tr, table[role='table'] tbody tr, div[role='row']")
-                            row = rows.nth(i)
-                        else:
-                            raise
-
+                # คลิกที่ RITM Number ลิงก์ตัวแรกในแถว
+                link = row.locator("a.linked.formlink").first
+                number = link.inner_text().strip()
                 if not number:
                     continue
 
@@ -350,22 +333,10 @@ def main():
 
                 # กลับไป list (ปุ่ม back ของ browser)
                 page.go_back()
-
-                # รอให้หน้า navigate back เสร็จ
-                page.wait_for_timeout(2000)
-
-                # Re-initialize frame หลัง go_back เพราะ frame อาจ reload
                 frame = page.frame(name="gsft_main") or page
-
-                # รอให้กลับไปหน้า list และตารางโหลดเสร็จ
-                try:
-                    frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
-                    print("[DEBUG] Table reloaded after go_back")
-                except Exception as e:
-                    print(f"[WARN] Error waiting for table after go_back: {e}")
-
-                # รอให้ตารางโหลดเสร็จและ stable
-                page.wait_for_timeout(2000)  # เพิ่มเวลารอให้มากขึ้น
+                # รอให้กลับไปหน้า list
+                frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
+                page.wait_for_timeout(1000)  # รอให้ตารางโหลดเสร็จ
 
             # หลังจากประมวลผลทุก row ในหน้านี้แล้ว ตรวจสอบว่ามีปุ่ม Next Page หรือไม่
             print(f"\nCompleted page {page_number}. Checking for next page...")
