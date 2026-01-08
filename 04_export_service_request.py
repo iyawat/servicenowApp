@@ -15,7 +15,7 @@ DOWNLOADED_LOG = Path("downloaded_ritm.log")  # Log file to track completed down
 # URL สำหรับ Requested Items list
 RITM_LIST_URL = (
     f"{BASE}/now/nav/ui/classic/params/target/"
-    "sc_req_item_list.do?sysparm_query=active%3Dtrue%5EEQ"
+    "sc_req_item_list.do%3Fsysparm_query%3Dactive%253Dtrue%255EEQ"
 )
 
 def safe_name(s: str) -> str:
@@ -196,21 +196,29 @@ def main():
                     page.wait_for_timeout(1000)
 
                     # Step 2-3: หาและคลิก PDF menu item โดยตรง
-                    # ตอนนี้ menu เปิดอยู่แล้ว ไม่ต้อง hover Export อีก
+                    # Element: <div item_id="undefined" class="context_item" role="menuitem" tabindex="-1" func_set="true">PDF</div>
                     print("[DEBUG] Looking for PDF menu item...")
 
                     # ลองหา PDF item ด้วย JavaScript ก่อน (เร็วกว่า)
                     # ต้องลองทั้ง page และ frame context
                     pdf_clicked = page.evaluate("""
                         () => {
-                            // หา PDF menu item ใน page context (menu มักอยู่นอก iframe)
-                            const menuItems = document.querySelectorAll('div.context_item[role="menuitem"], div[role="menuitem"]');
+                            // หา PDF menu item ด้วย selector ที่หลากหลาย
+                            const selectors = [
+                                'div.context_item[role="menuitem"][func_set="true"]',
+                                'div.context_item[role="menuitem"]',
+                                'div[role="menuitem"].context_item',
+                                'div.context_item',
+                            ];
 
-                            for (let item of menuItems) {
-                                const text = item.innerText || item.textContent || '';
-                                if (text.trim() === 'PDF') {
-                                    item.click();
-                                    return { success: true, text: text };
+                            for (let selector of selectors) {
+                                const items = document.querySelectorAll(selector);
+                                for (let item of items) {
+                                    const text = item.innerText || item.textContent || '';
+                                    if (text.trim() === 'PDF') {
+                                        item.click();
+                                        return { success: true, text: text, selector: selector };
+                                    }
                                 }
                             }
 
@@ -219,24 +227,31 @@ def main():
                     """)
 
                     if pdf_clicked.get('success'):
-                        print("[DEBUG] Clicked PDF with JavaScript")
+                        print(f"[DEBUG] Clicked PDF with JavaScript using selector: {pdf_clicked.get('selector', 'unknown')}")
                     else:
                         # Fallback: ใช้ Playwright
                         print("[DEBUG] Trying Playwright selectors for PDF...")
                         # ลอง page context ก่อน (menu มักอยู่นอก iframe)
-                        pdf_item = page.locator('div.context_item[role="menuitem"]:has-text("PDF")').first
+                        # Element: <div item_id="undefined" class="context_item" role="menuitem" tabindex="-1" func_set="true">PDF</div>
+
+                        # Selector 1: ตรงกับ element ที่ user บอก
+                        pdf_item = page.locator('div.context_item[role="menuitem"][func_set="true"]:has-text("PDF")').first
                         if pdf_item.count() == 0:
-                            pdf_item = page.locator('div[role="menuitem"]:has-text("PDF")').first
+                            pdf_item = page.locator('div.context_item[role="menuitem"]:has-text("PDF")').first
                         if pdf_item.count() == 0:
-                            # ลอง selector ที่ตรงกับ element ที่ user บอก
                             pdf_item = page.locator('div.context_item:has-text("PDF")').first
                         if pdf_item.count() == 0:
-                            # ลอง frame context
+                            pdf_item = page.locator('div[role="menuitem"]:has-text("PDF")').first
+
+                        # ลอง frame context
+                        if pdf_item.count() == 0:
+                            pdf_item = frame.locator('div.context_item[role="menuitem"][func_set="true"]:has-text("PDF")').first
+                        if pdf_item.count() == 0:
                             pdf_item = frame.locator('div.context_item[role="menuitem"]:has-text("PDF")').first
                         if pdf_item.count() == 0:
-                            pdf_item = frame.locator('div[role="menuitem"]:has-text("PDF")').first
-                        if pdf_item.count() == 0:
                             pdf_item = frame.locator('div.context_item:has-text("PDF")').first
+                        if pdf_item.count() == 0:
+                            pdf_item = frame.locator('div[role="menuitem"]:has-text("PDF")').first
 
                         if pdf_item.count() > 0:
                             pdf_item.click()
