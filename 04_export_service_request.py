@@ -104,20 +104,28 @@ def main():
                 # คลิกที่ RITM Number ลิงก์ตัวแรกในแถว
                 link = row.locator("a.linked.formlink").first
 
+                # เช็คว่ามี link หรือไม่ก่อน
+                if link.count() == 0:
+                    print(f"[WARN] No link found in row {i+1}, skipping")
+                    continue
+
                 # Scroll element into view และรอให้ stable ก่อนอ่าน
                 try:
-                    link.scroll_into_view_if_needed()
+                    link.scroll_into_view_if_needed(timeout=5000)
                     frame.wait_for_timeout(300)  # รอให้ scroll เสร็จ
-                except:
-                    pass
+                except Exception as scroll_err:
+                    print(f"[WARN] Could not scroll row {i+1} into view: {scroll_err}")
+                    continue
 
                 try:
-                    number = link.inner_text().strip()
+                    # ใช้ timeout สั้นๆ 5 วินาที แทน 30 วินาที
+                    number = link.inner_text(timeout=5000).strip()
                 except Exception as e:
                     print(f"[WARN] Could not read RITM number for row {i+1}: {e}")
                     continue
 
                 if not number:
+                    print(f"[WARN] Empty RITM number in row {i+1}, skipping")
                     continue
 
                 # Check if already downloaded (for resume capability)
