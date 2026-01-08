@@ -103,7 +103,20 @@ def main():
 
                 # คลิกที่ RITM Number ลิงก์ตัวแรกในแถว
                 link = row.locator("a.linked.formlink").first
-                number = link.inner_text().strip()
+
+                # Scroll element into view และรอให้ stable ก่อนอ่าน
+                try:
+                    link.scroll_into_view_if_needed()
+                    frame.wait_for_timeout(300)  # รอให้ scroll เสร็จ
+                except:
+                    pass
+
+                try:
+                    number = link.inner_text().strip()
+                except Exception as e:
+                    print(f"[WARN] Could not read RITM number for row {i+1}: {e}")
+                    continue
+
                 if not number:
                     continue
 
