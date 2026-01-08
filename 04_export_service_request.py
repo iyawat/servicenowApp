@@ -165,71 +165,51 @@ def main():
                         page.screenshot(path=f"debug_ritm_form_{number}.png")
                         print(f"[DEBUG] Saved screenshot to debug_ritm_form_{number}.png")
 
-                    # ใช้ JavaScript หาปุ่มทั้งหมดและลองกด
-                    # วิธีนี้จะหาปุ่มที่ตรงกับ hamburger menu pattern
-                    hamburger_found = frame.evaluate("""
+                    # ใช้ปุ่ม "Additional actions" ที่ถูกต้อง
+                    # Element: <button class="additional-actions-context-menu-button" aria-label="additional actions">
+                    additional_actions_btn = None
+
+                    # ลองหาด้วย class name (specific)
+                    additional_actions_btn = frame.locator('button.additional-actions-context-menu-button').first
+                    if additional_actions_btn.count() == 0:
+                        additional_actions_btn = page.locator('button.additional-actions-context-menu-button').first
+
+                    # ลองหาด้วย aria-label
+                    if additional_actions_btn.count() == 0:
+                        additional_actions_btn = frame.locator('button[aria-label="additional actions"]').first
+                    if additional_actions_btn.count() == 0:
+                        additional_actions_btn = page.locator('button[aria-label="additional actions"]').first
+
+                    # ลองหาด้วย onclick attribute
+                    if additional_actions_btn.count() == 0:
+                        additional_actions_btn = frame.locator('button[onclick*="contextShow"]').first
+                    if additional_actions_btn.count() == 0:
+                        additional_actions_btn = page.locator('button[onclick*="contextShow"]').first
+
+                    if additional_actions_btn.count() > 0:
+                        additional_actions_btn.click(timeout=5_000)
+                        print("Clicked Additional actions button")
+                    else:
+                        raise Exception("Additional actions button not found")
+
+                    # รอให้เมนูแสดงและ stable
+                    page.wait_for_timeout(1000)
+
+                    # Step 2-3: หาและคลิก PDF menu item โดยตรง
+                    # ตอนนี้ menu เปิดอยู่แล้ว ไม่ต้อง hover Export อีก
+                    print("[DEBUG] Looking for PDF menu item...")
+
+                    # ลองหา PDF item ด้วย JavaScript ก่อน (เร็วกว่า)
+                    pdf_clicked = frame.evaluate("""
                         () => {
-                            // หาปุ่มทั้งหมดใน form header
-                            const buttons = document.querySelectorAll('button');
-                            const results = [];
+                            // หา PDF menu item
+                            const menuItems = document.querySelectorAll('div.context_item[role="menuitem"], div[role="menuitem"]');
 
-                            for (let btn of buttons) {
-                                const id = btn.id || '';
-                                const className = btn.className || '';
-                                const ariaLabel = btn.getAttribute('aria-label') || '';
-                                const title = btn.getAttribute('title') || '';
-
-                                results.push({
-                                    id: id,
-                                    class: className,
-                                    ariaLabel: ariaLabel,
-                                    title: title,
-                                    visible: btn.offsetParent !== null
-                                });
-                            }
-
-                            return results;
-                        }
-                    """)
-
-                    print(f"[DEBUG] Found {len(hamburger_found)} buttons in form")
-                    for idx, btn_info in enumerate(hamburger_found[:10]):  # แสดงแค่ 10 ตัวแรก
-                        if btn_info['visible']:
-                            print(f"  Button {idx}: id={btn_info['id']}, aria-label={btn_info['ariaLabel']}, title={btn_info['title']}")
-
-                    # ลองใช้ JavaScript click บน hamburger button โดยตรง
-                    # ปุ่ม hamburger ใน ServiceNow มักจะอยู่ใน header และมี icon หรือ text
-                    clicked = frame.evaluate("""
-                        () => {
-                            // ลองหาปุ่มตาม pattern ต่างๆ
-                            const selectors = [
-                                'button[id="header_context_menu"]',
-                                'button.header-menu',
-                                'button.form-context-menu',
-                                'button[data-context-menu="form"]',
-                                'button[onclick*="showContextMenu"]',
-                                'button.sn-popover-basic',
-                            ];
-
-                            for (let selector of selectors) {
-                                const btn = document.querySelector(selector);
-                                if (btn) {
-                                    btn.click();
-                                    return { success: true, selector: selector };
-                                }
-                            }
-
-                            // ถ้าไม่เจอ ลองหาปุ่มที่มี hamburger icon (3 horizontal lines)
-                            const allButtons = document.querySelectorAll('button');
-                            for (let btn of allButtons) {
-                                const html = btn.innerHTML.toLowerCase();
-                                const classes = btn.className.toLowerCase();
-
-                                // เช็คว่ามี icon hamburger หรือไม่
-                                if (html.includes('menu') || classes.includes('menu') ||
-                                    html.includes('☰') || html.includes('≡')) {
-                                    btn.click();
-                                    return { success: true, selector: 'icon-based', id: btn.id };
+                            for (let item of menuItems) {
+                                const text = item.innerText || item.textContent || '';
+                                if (text.trim() === 'PDF') {
+                                    item.click();
+                                    return { success: true, text: text };
                                 }
                             }
 
@@ -237,78 +217,26 @@ def main():
                         }
                     """)
 
-                    if clicked.get('success'):
-                        print(f"[DEBUG] Clicked hamburger menu using: {clicked}")
+                    if pdf_clicked.get('success'):
+                        print("[DEBUG] Clicked PDF with JavaScript")
                     else:
-                        print("[WARN] Could not find hamburger menu button, trying fallback...")
-                        # Fallback: ลอง Playwright selector
-                        hamburger_btn = frame.locator('button#header_context_menu').first
-                        if hamburger_btn.count() == 0:
-                            hamburger_btn = page.locator('button#header_context_menu').first
-                        if hamburger_btn.count() > 0:
-                            hamburger_btn.click(timeout=5_000)
+                        # Fallback: ใช้ Playwright
+                        print("[DEBUG] Trying Playwright selectors for PDF...")
+                        pdf_item = page.locator('div.context_item[role="menuitem"]:has-text("PDF")').first
+                        if pdf_item.count() == 0:
+                            pdf_item = frame.locator('div.context_item[role="menuitem"]:has-text("PDF")').first
+                        if pdf_item.count() == 0:
+                            pdf_item = page.locator('div[role="menuitem"]:has-text("PDF")').first
+                        if pdf_item.count() == 0:
+                            pdf_item = frame.locator('div[role="menuitem"]:has-text("PDF")').first
+
+                        if pdf_item.count() > 0:
+                            pdf_item.click()
+                            print("Clicked PDF menu item with Playwright")
                         else:
-                            raise Exception("Hamburger menu button not found")
+                            raise Exception("PDF menu item not found")
 
-                    # รอให้เมนูแสดงและ stable
-                    page.wait_for_timeout(2000)
-
-                    # Step 2: หา Export menu item
-                    export_menu = None
-                    for attempt in range(3):  # ลอง 3 ครั้ง
-                        try:
-                            # ลองหา Export menu item หลาย selector
-                            # Try text-based selector first (most reliable)
-                            export_menu = page.locator('div[role="menuitem"]:has-text("Export")').first
-                            if export_menu.count() == 0:
-                                export_menu = frame.locator('div[role="menuitem"]:has-text("Export")').first
-
-                            if export_menu.count() == 0:
-                                # fallback 1: ลองหาด้วย data attribute
-                                export_menu = page.locator('div.context_item[data-context-menu-label="Export"]').first
-                            if export_menu.count() == 0:
-                                export_menu = frame.locator('div.context_item[data-context-menu-label="Export"]').first
-
-                            if export_menu.count() == 0:
-                                # fallback 2: ลองหาด้วย item_id
-                                export_menu = page.locator('div[item_id="context_exportmenu"]').first
-                            if export_menu.count() == 0:
-                                export_menu = frame.locator('div[item_id="context_exportmenu"]').first
-
-                            if export_menu.count() > 0:
-                                # รอให้ visible
-                                export_menu.wait_for(state="visible", timeout=5_000)
-                                print(f"[DEBUG] Found Export menu (attempt {attempt+1})")
-                                break
-                            else:
-                                if attempt < 2:
-                                    print(f"Export menu not found, retrying... (attempt {attempt+1}/3)")
-                                    frame.wait_for_timeout(1500)
-                        except Exception as e:
-                            if attempt < 2:
-                                print(f"Error waiting for Export menu, retrying... (attempt {attempt+1}/3): {e}")
-                                frame.wait_for_timeout(1500)
-                            else:
-                                raise
-
-                    if export_menu is None or export_menu.count() == 0:
-                        raise Exception("Export menu not found after 3 attempts")
-
-                    export_menu.hover()
-                    frame.wait_for_timeout(500)  # รอให้ submenu แสดง
-
-                    # Step 3: คลิก "PDF" item
-                    pdf_item = page.locator('div[role="menuitem"]:has-text("PDF")').first
-                    if pdf_item.count() == 0:
-                        pdf_item = frame.locator('div[role="menuitem"]:has-text("PDF")').first
-                    if pdf_item.count() == 0:
-                        pdf_item = page.locator('div.context_item:has-text("PDF")').first
-                    if pdf_item.count() == 0:
-                        pdf_item = frame.locator('div.context_item:has-text("PDF")').first
-
-                    pdf_item.click()
-                    print("Clicked PDF menu item")
-                    frame.wait_for_timeout(1000)  # รอให้ Export dialog ขึ้นมา
+                    page.wait_for_timeout(1000)  # รอให้ Export dialog ขึ้นมา
 
                     # Step 4: กดปุ่ม "Export" ใน dialog เพื่อเริ่ม generate PDF
                     # Dialogs usually appear in page context (outside iframe)
