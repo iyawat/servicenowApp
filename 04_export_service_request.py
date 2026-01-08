@@ -103,9 +103,24 @@ def main():
                 rows = frame.locator("table.list_table tbody tr, table[role='table'] tbody tr, div[role='row']")
                 row = rows.nth(i)
 
-                # คลิกที่ RITM Number ลิงก์ตัวแรกในแถว
-                link = row.locator("a.linked.formlink").first
-                number = link.inner_text().strip()
+                # คลิกที่ RITM Number ลิงก์ตัวแรกในแถว - retry if stale
+                number = None
+                for attempt in range(3):
+                    try:
+                        link = row.locator("a.linked.formlink").first
+                        number = link.inner_text(timeout=10_000).strip()
+                        if number:
+                            break
+                    except Exception as e:
+                        if attempt < 2:
+                            print(f"[WARN] Failed to get RITM number (attempt {attempt+1}/3): {e}")
+                            frame.wait_for_timeout(1000)
+                            # Re-fetch row
+                            rows = frame.locator("table.list_table tbody tr, table[role='table'] tbody tr, div[role='row']")
+                            row = rows.nth(i)
+                        else:
+                            raise
+
                 if not number:
                     continue
 
@@ -143,20 +158,100 @@ def main():
                 # Step 1-5: Hamburger menu -> Export -> PDF -> Export -> Download
                 try:
                     # Step 1: กดปุ่ม hamburger menu (สำหรับ RITM)
-                    # ลองหลาย selector สำหรับ hamburger menu
-                    hamburger_btn = frame.locator('button#sysverb_context_menu').first
-                    if hamburger_btn.count() == 0:
-                        hamburger_btn = frame.locator('button[aria-label="More options"]').first
-                    if hamburger_btn.count() == 0:
-                        hamburger_btn = page.locator('button#sysverb_context_menu').first
-                    if hamburger_btn.count() == 0:
-                        hamburger_btn = page.locator('button[aria-label="More options"]').first
+                    print("[DEBUG] Looking for hamburger menu button...")
 
-                    hamburger_btn.click(timeout=5_000)
-                    print("Clicked hamburger menu button")
+                    # Take screenshot for debugging
+                    if i == 0 and page_number == 1:
+                        page.screenshot(path=f"debug_ritm_form_{number}.png")
+                        print(f"[DEBUG] Saved screenshot to debug_ritm_form_{number}.png")
+
+                    # ใช้ JavaScript หาปุ่มทั้งหมดและลองกด
+                    # วิธีนี้จะหาปุ่มที่ตรงกับ hamburger menu pattern
+                    hamburger_found = frame.evaluate("""
+                        () => {
+                            // หาปุ่มทั้งหมดใน form header
+                            const buttons = document.querySelectorAll('button');
+                            const results = [];
+
+                            for (let btn of buttons) {
+                                const id = btn.id || '';
+                                const className = btn.className || '';
+                                const ariaLabel = btn.getAttribute('aria-label') || '';
+                                const title = btn.getAttribute('title') || '';
+
+                                results.push({
+                                    id: id,
+                                    class: className,
+                                    ariaLabel: ariaLabel,
+                                    title: title,
+                                    visible: btn.offsetParent !== null
+                                });
+                            }
+
+                            return results;
+                        }
+                    """)
+
+                    print(f"[DEBUG] Found {len(hamburger_found)} buttons in form")
+                    for idx, btn_info in enumerate(hamburger_found[:10]):  # แสดงแค่ 10 ตัวแรก
+                        if btn_info['visible']:
+                            print(f"  Button {idx}: id={btn_info['id']}, aria-label={btn_info['ariaLabel']}, title={btn_info['title']}")
+
+                    # ลองใช้ JavaScript click บน hamburger button โดยตรง
+                    # ปุ่ม hamburger ใน ServiceNow มักจะอยู่ใน header และมี icon หรือ text
+                    clicked = frame.evaluate("""
+                        () => {
+                            // ลองหาปุ่มตาม pattern ต่างๆ
+                            const selectors = [
+                                'button[id="header_context_menu"]',
+                                'button.header-menu',
+                                'button.form-context-menu',
+                                'button[data-context-menu="form"]',
+                                'button[onclick*="showContextMenu"]',
+                                'button.sn-popover-basic',
+                            ];
+
+                            for (let selector of selectors) {
+                                const btn = document.querySelector(selector);
+                                if (btn) {
+                                    btn.click();
+                                    return { success: true, selector: selector };
+                                }
+                            }
+
+                            // ถ้าไม่เจอ ลองหาปุ่มที่มี hamburger icon (3 horizontal lines)
+                            const allButtons = document.querySelectorAll('button');
+                            for (let btn of allButtons) {
+                                const html = btn.innerHTML.toLowerCase();
+                                const classes = btn.className.toLowerCase();
+
+                                // เช็คว่ามี icon hamburger หรือไม่
+                                if (html.includes('menu') || classes.includes('menu') ||
+                                    html.includes('☰') || html.includes('≡')) {
+                                    btn.click();
+                                    return { success: true, selector: 'icon-based', id: btn.id };
+                                }
+                            }
+
+                            return { success: false };
+                        }
+                    """)
+
+                    if clicked.get('success'):
+                        print(f"[DEBUG] Clicked hamburger menu using: {clicked}")
+                    else:
+                        print("[WARN] Could not find hamburger menu button, trying fallback...")
+                        # Fallback: ลอง Playwright selector
+                        hamburger_btn = frame.locator('button#header_context_menu').first
+                        if hamburger_btn.count() == 0:
+                            hamburger_btn = page.locator('button#header_context_menu').first
+                        if hamburger_btn.count() > 0:
+                            hamburger_btn.click(timeout=5_000)
+                        else:
+                            raise Exception("Hamburger menu button not found")
 
                     # รอให้เมนูแสดงและ stable
-                    frame.wait_for_timeout(2000)
+                    page.wait_for_timeout(2000)
 
                     # Step 2: หา Export menu item
                     export_menu = None
