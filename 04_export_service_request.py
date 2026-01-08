@@ -195,7 +195,38 @@ def main():
                     # รอให้เมนูแสดงและ stable
                     page.wait_for_timeout(1000)
 
-                    # Step 2-3: หาและคลิก PDF menu item โดยตรง
+                    # Step 2: Hover/Click บน Export menu เพื่อเปิด submenu
+                    # Element: <div item_id="context_exportmenu" class="context_item context_menu_hover"
+                    #          role="menuitem" aria-haspopup="true" data-context-menu-label="Export">
+                    print("[DEBUG] Looking for Export menu item...")
+
+                    export_menu = None
+                    # ลองหาด้วย item_id
+                    export_menu = page.locator('div[item_id="context_exportmenu"]').first
+                    if export_menu.count() == 0:
+                        export_menu = frame.locator('div[item_id="context_exportmenu"]').first
+
+                    # ลองหาด้วย data-context-menu-label
+                    if export_menu.count() == 0:
+                        export_menu = page.locator('div.context_item[data-context-menu-label="Export"]').first
+                    if export_menu.count() == 0:
+                        export_menu = frame.locator('div.context_item[data-context-menu-label="Export"]').first
+
+                    # ลองหาด้วย text
+                    if export_menu.count() == 0:
+                        export_menu = page.locator('div.context_item[role="menuitem"]:has-text("Export")').first
+                    if export_menu.count() == 0:
+                        export_menu = frame.locator('div.context_item[role="menuitem"]:has-text("Export")').first
+
+                    if export_menu.count() > 0:
+                        print("[DEBUG] Found Export menu, hovering to show submenu...")
+                        export_menu.hover()
+                        page.wait_for_timeout(800)  # รอให้ submenu แสดง
+                        print("[DEBUG] Export submenu should be visible now")
+                    else:
+                        raise Exception("Export menu not found")
+
+                    # Step 3: หาและคลิก PDF menu item โดยตรง
                     # Element: <div item_id="undefined" class="context_item" role="menuitem" tabindex="-1" func_set="true">PDF</div>
                     print("[DEBUG] Looking for PDF menu item...")
 
