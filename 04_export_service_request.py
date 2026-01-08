@@ -200,9 +200,10 @@ def main():
                     print("[DEBUG] Looking for PDF menu item...")
 
                     # ลองหา PDF item ด้วย JavaScript ก่อน (เร็วกว่า)
-                    pdf_clicked = frame.evaluate("""
+                    # ต้องลองทั้ง page และ frame context
+                    pdf_clicked = page.evaluate("""
                         () => {
-                            // หา PDF menu item
+                            // หา PDF menu item ใน page context (menu มักอยู่นอก iframe)
                             const menuItems = document.querySelectorAll('div.context_item[role="menuitem"], div[role="menuitem"]');
 
                             for (let item of menuItems) {
@@ -222,13 +223,20 @@ def main():
                     else:
                         # Fallback: ใช้ Playwright
                         print("[DEBUG] Trying Playwright selectors for PDF...")
+                        # ลอง page context ก่อน (menu มักอยู่นอก iframe)
                         pdf_item = page.locator('div.context_item[role="menuitem"]:has-text("PDF")').first
-                        if pdf_item.count() == 0:
-                            pdf_item = frame.locator('div.context_item[role="menuitem"]:has-text("PDF")').first
                         if pdf_item.count() == 0:
                             pdf_item = page.locator('div[role="menuitem"]:has-text("PDF")').first
                         if pdf_item.count() == 0:
+                            # ลอง selector ที่ตรงกับ element ที่ user บอก
+                            pdf_item = page.locator('div.context_item:has-text("PDF")').first
+                        if pdf_item.count() == 0:
+                            # ลอง frame context
+                            pdf_item = frame.locator('div.context_item[role="menuitem"]:has-text("PDF")').first
+                        if pdf_item.count() == 0:
                             pdf_item = frame.locator('div[role="menuitem"]:has-text("PDF")').first
+                        if pdf_item.count() == 0:
+                            pdf_item = frame.locator('div.context_item:has-text("PDF")').first
 
                         if pdf_item.count() > 0:
                             pdf_item.click()
@@ -375,10 +383,22 @@ def main():
 
                 # กลับไป list (ปุ่ม back ของ browser)
                 page.go_back()
+
+                # รอให้หน้า navigate back เสร็จ
+                page.wait_for_timeout(2000)
+
+                # Re-initialize frame หลัง go_back เพราะ frame อาจ reload
                 frame = page.frame(name="gsft_main") or page
-                # รอให้กลับไปหน้า list
-                frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
-                page.wait_for_timeout(1000)  # รอให้ตารางโหลดเสร็จ
+
+                # รอให้กลับไปหน้า list และตารางโหลดเสร็จ
+                try:
+                    frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
+                    print("[DEBUG] Table reloaded after go_back")
+                except Exception as e:
+                    print(f"[WARN] Error waiting for table after go_back: {e}")
+
+                # รอให้ตารางโหลดเสร็จและ stable
+                page.wait_for_timeout(2000)  # เพิ่มเวลารอให้มากขึ้น
 
             # หลังจากประมวลผลทุก row ในหน้านี้แล้ว ตรวจสอบว่ามีปุ่ม Next Page หรือไม่
             print(f"\nCompleted page {page_number}. Checking for next page...")
