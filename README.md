@@ -14,5 +14,8 @@ python3 -m playwright install
 3. รัน Export Script
    python3 02_export_changes.py
 
-4. รัน Report Script
+4. รัน Export Service Request Script (RITM)
+   python3 04_export_service_request.py
+
+5. รัน Report Script
    python3 03_check_file.py
