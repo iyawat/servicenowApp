@@ -313,27 +313,49 @@ def main():
 
                             # ปิด dialog ด้วยปุ่ม Close
                             print("[DEBUG] Closing Attachments dialog...")
-                            close_btn = page.locator('button#attachment_closemodal').first
-                            if close_btn.count() == 0:
-                                close_btn = frame.locator('button#attachment_closemodal').first
-                            if close_btn.count() > 0:
-                                close_btn.click()
-                            else:
-                                # fallback: ใช้ ESC ถ้าหาปุ่มไม่เจอ
-                                page.keyboard.press("Escape")
-                            frame.wait_for_timeout(500)
+                            try:
+                                close_btn = page.locator('button#attachment_closemodal').first
+                                if close_btn.count() == 0:
+                                    close_btn = frame.locator('button#attachment_closemodal').first
+                                if close_btn.count() > 0:
+                                    print("[DEBUG] Found close button, clicking...")
+                                    close_btn.click()
+                                    print("[DEBUG] Dialog closed successfully")
+                                else:
+                                    # fallback: ใช้ ESC ถ้าหาปุ่มไม่เจอ
+                                    print("[DEBUG] Close button not found, using Escape key...")
+                                    frame.keyboard.press("Escape")
+                                frame.wait_for_timeout(500)
+                            except Exception as close_err:
+                                print(f"[WARN] Error closing dialog: {close_err}")
+                                # Try one more time with page keyboard
+                                try:
+                                    page.keyboard.press("Escape")
+                                    frame.wait_for_timeout(500)
+                                except:
+                                    print("[WARN] Could not close dialog with Escape either")
                         else:
                             print("[INFO] No attachments or Download All button not found - closing dialog")
                             # ปิด dialog ด้วยปุ่ม Close
-                            close_btn = page.locator('button#attachment_closemodal').first
-                            if close_btn.count() == 0:
-                                close_btn = frame.locator('button#attachment_closemodal').first
-                            if close_btn.count() > 0:
-                                close_btn.click()
-                            else:
-                                # fallback: ใช้ ESC ถ้าหาปุ่มไม่เจอ
-                                page.keyboard.press("Escape")
-                            frame.wait_for_timeout(500)
+                            try:
+                                close_btn = page.locator('button#attachment_closemodal').first
+                                if close_btn.count() == 0:
+                                    close_btn = frame.locator('button#attachment_closemodal').first
+                                if close_btn.count() > 0:
+                                    print("[DEBUG] Found close button, clicking...")
+                                    close_btn.click()
+                                else:
+                                    # fallback: ใช้ ESC ถ้าหาปุ่มไม่เจอ
+                                    print("[DEBUG] Close button not found, using Escape key...")
+                                    frame.keyboard.press("Escape")
+                                frame.wait_for_timeout(500)
+                            except Exception as close_err:
+                                print(f"[WARN] Error closing dialog: {close_err}")
+                                try:
+                                    page.keyboard.press("Escape")
+                                    frame.wait_for_timeout(500)
+                                except:
+                                    print("[WARN] Could not close dialog with Escape either")
                     else:
                         print("[INFO] No attachments button found (may not have attachments)")
 
@@ -345,11 +367,25 @@ def main():
                 print(f"✓ {number} completed and logged")
 
                 # กลับไป list (ปุ่ม back ของ browser)
-                page.go_back()
-                frame = page.frame(name="gsft_main") or page
-                # รอให้กลับไปหน้า list
-                frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
-                page.wait_for_timeout(1000)  # รอให้ตารางโหลดเสร็จ
+                try:
+                    print("[DEBUG] Going back to list...")
+                    page.go_back()
+                    print("[DEBUG] Verifying page is still valid...")
+                    # Verify page is still valid
+                    if page.is_closed():
+                        print("[ERROR] Page was closed unexpectedly!")
+                        break
+
+                    frame = page.frame(name="gsft_main") or page
+                    print("[DEBUG] Waiting for table to reappear...")
+                    # รอให้กลับไปหน้า list
+                    frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
+                    page.wait_for_timeout(1000)  # รอให้ตารางโหลดเสร็จ
+                    print("[DEBUG] Back to list successfully")
+                except Exception as e:
+                    print(f"[ERROR] Failed to return to list: {e}")
+                    print("[ERROR] Browser/page may have been closed. Stopping.")
+                    break
 
             # หลังจากประมวลผลทุก row ในหน้านี้แล้ว ตรวจสอบว่ามีปุ่ม Next Page หรือไม่
             print(f"\nCompleted page {page_number}. Checking for next page...")
