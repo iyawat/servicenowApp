@@ -99,6 +99,8 @@ def main():
             print(f"Found {count} rows on page {page_number}")
 
             for i in range(count):
+                # Re-fetch rows each time to avoid stale element after go_back
+                rows = frame.locator("table.list_table tbody tr, table[role='table'] tbody tr, div[role='row']")
                 row = rows.nth(i)
 
                 # คลิกที่ RITM Number ลิงก์ตัวแรกในแถว
@@ -138,37 +140,45 @@ def main():
                     page.wait_for_timeout(3000)
 
                 # ---------- (A) Export PDF ผ่าน UI ----------
-                # Step 1-5: Additional actions -> Export -> PDF -> Export -> Download
+                # Step 1-5: Hamburger menu -> Export -> PDF -> Export -> Download
                 try:
-                    # Step 1: กดปุ่ม "Additional actions" (icon menu)
-                    additional_actions_btn = frame.locator('button.additional-actions-context-menu-button[aria-label="additional actions"]').first
-                    if additional_actions_btn.count() == 0:
-                        # ลองหาใน page หลัก (ไม่ใช่ใน frame)
-                        additional_actions_btn = page.locator('button.additional-actions-context-menu-button[aria-label="additional actions"]').first
+                    # Step 1: กดปุ่ม hamburger menu (สำหรับ RITM)
+                    # ลองหลาย selector สำหรับ hamburger menu
+                    hamburger_btn = frame.locator('button#sysverb_context_menu').first
+                    if hamburger_btn.count() == 0:
+                        hamburger_btn = frame.locator('button[aria-label="More options"]').first
+                    if hamburger_btn.count() == 0:
+                        hamburger_btn = page.locator('button#sysverb_context_menu').first
+                    if hamburger_btn.count() == 0:
+                        hamburger_btn = page.locator('button[aria-label="More options"]').first
 
-                    additional_actions_btn.click(timeout=5_000)
-                    print("Clicked Additional actions button")
+                    hamburger_btn.click(timeout=5_000)
+                    print("Clicked hamburger menu button")
 
                     # รอให้เมนูแสดงและ stable
                     frame.wait_for_timeout(2000)
 
-                    # Step 2: รอให้ Export menu แสดงก่อนที่จะ hover
+                    # Step 2: หา Export menu item
                     export_menu = None
                     for attempt in range(3):  # ลอง 3 ครั้ง
                         try:
-                            # ลองหา Export menu item ทั้งใน frame และ page context
-                            export_menu = frame.locator('div.context_item[role="menuitem"][data-context-menu-label="Export"]').first
+                            # ลองหา Export menu item หลาย selector
+                            # Try text-based selector first (most reliable)
+                            export_menu = page.locator('div[role="menuitem"]:has-text("Export")').first
                             if export_menu.count() == 0:
-                                # fallback 1: ลองหาด้วย item_id ใน frame
-                                export_menu = frame.locator('div.context_item[item_id="context_exportmenu"]').first
+                                export_menu = frame.locator('div[role="menuitem"]:has-text("Export")').first
 
                             if export_menu.count() == 0:
-                                # fallback 2: ลองหาใน page context
-                                export_menu = page.locator('div.context_item[role="menuitem"][data-context-menu-label="Export"]').first
+                                # fallback 1: ลองหาด้วย data attribute
+                                export_menu = page.locator('div.context_item[data-context-menu-label="Export"]').first
+                            if export_menu.count() == 0:
+                                export_menu = frame.locator('div.context_item[data-context-menu-label="Export"]').first
 
                             if export_menu.count() == 0:
-                                # fallback 3: ลองหาด้วย item_id ใน page context
-                                export_menu = page.locator('div.context_item[item_id="context_exportmenu"]').first
+                                # fallback 2: ลองหาด้วย item_id
+                                export_menu = page.locator('div[item_id="context_exportmenu"]').first
+                            if export_menu.count() == 0:
+                                export_menu = frame.locator('div[item_id="context_exportmenu"]').first
 
                             if export_menu.count() > 0:
                                 # รอให้ visible
@@ -193,25 +203,34 @@ def main():
                     frame.wait_for_timeout(500)  # รอให้ submenu แสดง
 
                     # Step 3: คลิก "PDF" item
-                    pdf_item = frame.locator('div.context_item[role="menuitem"]:has-text("PDF")').first
+                    pdf_item = page.locator('div[role="menuitem"]:has-text("PDF")').first
+                    if pdf_item.count() == 0:
+                        pdf_item = frame.locator('div[role="menuitem"]:has-text("PDF")').first
+                    if pdf_item.count() == 0:
+                        pdf_item = page.locator('div.context_item:has-text("PDF")').first
+                    if pdf_item.count() == 0:
+                        pdf_item = frame.locator('div.context_item:has-text("PDF")').first
+
                     pdf_item.click()
+                    print("Clicked PDF menu item")
                     frame.wait_for_timeout(1000)  # รอให้ Export dialog ขึ้นมา
 
                     # Step 4: กดปุ่ม "Export" ใน dialog เพื่อเริ่ม generate PDF
-                    export_btn = frame.locator('button#ok_button').first
+                    # Dialogs usually appear in page context (outside iframe)
+                    export_btn = page.locator('button#ok_button').first
                     if export_btn.count() == 0:
-                        export_btn = page.locator('button#ok_button').first
+                        export_btn = frame.locator('button#ok_button').first
 
                     export_btn.click()
                     print("Generating PDF...")
 
                     # รอให้ PDF generation เสร็จ และปุ่ม Download ปรากฏ
-                    frame.wait_for_timeout(3000)  # รอให้ process PDF
+                    page.wait_for_timeout(5000)  # เพิ่มเวลารอให้ PDF process เสร็จ
 
                     # Step 5: กดปุ่ม "Download" เพื่อดาวน์โหลด PDF
-                    download_btn = frame.locator('button#download_button').first
+                    download_btn = page.locator('button#download_button').first
                     if download_btn.count() == 0:
-                        download_btn = page.locator('button#download_button').first
+                        download_btn = frame.locator('button#download_button').first
 
                     # รอให้ปุ่ม Download พร้อม
                     download_btn.wait_for(state="visible", timeout=30_000)
