@@ -67,6 +67,15 @@ def main():
         # รอให้หน้าโหลดเสร็จ
         page.wait_for_timeout(3000)
 
+        # ตรวจสอบว่า session หมดอายุหรือไม่ (ถูก redirect ไป login page)
+        current_url = page.url.lower()
+        if 'login' in current_url or 'sso' in current_url or 'auth' in current_url:
+            print("[ERROR] Session expired! You need to login again.")
+            print("Please run: python 01_login_save_state.py")
+            page.screenshot(path="debug_session_expired.png")
+            browser.close()
+            return
+
         # ServiceNow classic list มักอยู่ใน iframe: gsft_main
         gsft_frame = page.frame(name="gsft_main")
         if gsft_frame:
@@ -85,6 +94,11 @@ def main():
             print(f"[ERROR] Cannot find table. Current URL: {page.url}")
             print("Taking screenshot for debug...")
             page.screenshot(path="debug_ritm_list_page.png")
+            print("\nPossible causes:")
+            print("1. Session expired - run: python 01_login_save_state.py")
+            print("2. Wrong URL or page structure changed")
+            print("3. Page is still loading - check debug_ritm_list_page.png")
+            browser.close()
             raise
 
         # Loop through all pages until no more next page button
