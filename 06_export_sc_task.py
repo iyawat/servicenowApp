@@ -127,36 +127,53 @@ def main():
         # ---------- กดปุ่ม "All" เพื่อแสดงทุกรายการ ----------
         try:
             print("Looking for 'All' filter option...")
+
+            # รอสักครู่ให้ breadcrumb โหลดเสร็จ
+            page.wait_for_timeout(2000)
+
             all_link = None
 
-            # ลองหาหลาย selector สำหรับปุ่ม/ลิงก์ "All"
+            # ลองหาหลาย selector สำหรับปุ่ม/ลิงก์ "All" (เพิ่ม selectors ใหม่)
             selectors = [
-                'a[onclick*="all"]:has-text("All")',
-                'a.breadcrumb_link:has-text("All")',
-                'a:has-text("All")',
-                'span.breadcrumb_element a:has-text("All")',
-                'button:has-text("All")',
+                'a:has-text("All")',                                # Generic link
+                'a.breadcrumb:has-text("All")',                     # Breadcrumb class
+                'a.breadcrumb_link:has-text("All")',               # Breadcrumb link
+                'span.breadcrumb_element a:has-text("All")',       # In breadcrumb span
+                'div.breadcrumb a:has-text("All")',                # In breadcrumb div
+                'a[onclick*="all"]',                                # onclick attribute
+                'a[href*="sysparm_query="]',                       # Query parameter
+                'button:has-text("All")',                          # Button
             ]
 
+            # ลองใน frame ก่อน
+            print("[DEBUG] Searching in frame...")
             for sel in selectors:
-                candidate = frame.locator(sel).first
-                if candidate.count() > 0:
-                    all_link = candidate
-                    print(f"[DEBUG] Found 'All' with selector: {sel}")
-                    break
-
-            if all_link is None:
-                # fallback: ลองหาใน page context
-                for sel in selectors:
-                    candidate = page.locator(sel).first
+                try:
+                    candidate = frame.locator(sel).first
                     if candidate.count() > 0:
                         all_link = candidate
-                        print(f"[DEBUG] Found 'All' in page context with selector: {sel}")
+                        print(f"[DEBUG] ✓ Found 'All' in frame with selector: {sel}")
                         break
+                except:
+                    continue
+
+            # ถ้ายังไม่เจอ ลองใน page context
+            if all_link is None:
+                print("[DEBUG] Not found in frame, trying page context...")
+                for sel in selectors:
+                    try:
+                        candidate = page.locator(sel).first
+                        if candidate.count() > 0:
+                            all_link = candidate
+                            print(f"[DEBUG] ✓ Found 'All' in page context with selector: {sel}")
+                            break
+                    except:
+                        continue
 
             if all_link is not None:
+                print("[DEBUG] Attempting to click 'All' link...")
                 all_link.click(timeout=5_000)
-                print("Clicked 'All' - waiting for table to reload...")
+                print("✓ Clicked 'All' - waiting for table to reload...")
                 page.wait_for_timeout(3000)
 
                 # Refresh frame reference หลังจาก reload
@@ -165,9 +182,13 @@ def main():
                 # รอให้ตารางโหลดใหม่
                 frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
                 page.wait_for_timeout(1000)
-                print("Table reloaded with all items!")
+                print("✓ Table reloaded with all items!")
             else:
-                print("[WARN] 'All' option not found - proceeding with current view")
+                print("[WARN] ⚠ 'All' option not found with any selector!")
+                print("[DEBUG] Taking screenshot for debugging...")
+                page.screenshot(path="debug_all_filter_not_found.png")
+                print("Screenshot saved: debug_all_filter_not_found.png")
+                print("[WARN] Proceeding with current filter view (may have Active=true filter)")
 
         except Exception as e:
             print(f"[WARN] Could not click 'All' filter: {e}")
