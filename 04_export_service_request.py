@@ -101,6 +101,55 @@ def main():
             browser.close()
             raise
 
+        # ---------- กดปุ่ม "All" เพื่อแสดงทุกรายการ ----------
+        try:
+            print("Looking for 'All' filter option...")
+            all_link = None
+
+            # ลองหาหลาย selector สำหรับปุ่ม/ลิงก์ "All"
+            selectors = [
+                'a[onclick*="all"]:has-text("All")',
+                'a.breadcrumb_link:has-text("All")',
+                'a:has-text("All")',
+                'span.breadcrumb_element a:has-text("All")',
+                'button:has-text("All")',
+            ]
+
+            for sel in selectors:
+                candidate = frame.locator(sel).first
+                if candidate.count() > 0:
+                    all_link = candidate
+                    print(f"[DEBUG] Found 'All' with selector: {sel}")
+                    break
+
+            if all_link is None:
+                # fallback: ลองหาใน page context
+                for sel in selectors:
+                    candidate = page.locator(sel).first
+                    if candidate.count() > 0:
+                        all_link = candidate
+                        print(f"[DEBUG] Found 'All' in page context with selector: {sel}")
+                        break
+
+            if all_link is not None:
+                all_link.click(timeout=5_000)
+                print("Clicked 'All' - waiting for table to reload...")
+                page.wait_for_timeout(3000)
+
+                # Refresh frame reference หลังจาก reload
+                frame = page.frame(name="gsft_main") or page
+
+                # รอให้ตารางโหลดใหม่
+                frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
+                page.wait_for_timeout(1000)
+                print("Table reloaded with all items!")
+            else:
+                print("[WARN] 'All' option not found - proceeding with current view")
+
+        except Exception as e:
+            print(f"[WARN] Could not click 'All' filter: {e}")
+            print("Proceeding with current view...")
+
         # Loop through all pages until no more next page button
         page_number = 1
 
