@@ -135,14 +135,14 @@ def main():
 
             # ลองหาหลาย selector สำหรับปุ่ม/ลิงก์ "All" (เพิ่ม selectors ใหม่)
             selectors = [
-                'a:has-text("All")',                                # Generic link
-                'a.breadcrumb:has-text("All")',                     # Breadcrumb class
-                'a.breadcrumb_link:has-text("All")',               # Breadcrumb link
-                'span.breadcrumb_element a:has-text("All")',       # In breadcrumb span
-                'div.breadcrumb a:has-text("All")',                # In breadcrumb div
-                'a[onclick*="all"]',                                # onclick attribute
-                'a[href*="sysparm_query="]',                       # Query parameter
-                'button:has-text("All")',                          # Button
+                'a.breadcrumb_link[role="link"]:has(b:has-text("All"))',  # Exact match from HTML
+                'a.breadcrumb_link:has(b:has-text("All"))',               # Breadcrumb with <b>All</b>
+                'a.breadcrumb_link[aria-label*="All"]',                   # By aria-label
+                'a[filter=""].breadcrumb_link',                           # By filter attribute
+                'a.breadcrumb_link:has-text("All")',                      # Breadcrumb link
+                'a[role="link"]:has-text("All")',                         # By role
+                'a:has-text("All")',                                      # Generic link
+                'button:has-text("All")',                                 # Button fallback
             ]
 
             # ลองใน frame ก่อน
