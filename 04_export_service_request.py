@@ -87,19 +87,42 @@ def main():
 
         # รอให้ตารางมา
         print("Waiting for table to load...")
-        try:
-            frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
-            print("Table found!")
-        except Exception as e:
-            print(f"[ERROR] Cannot find table. Current URL: {page.url}")
+        table_found = False
+
+        # ลอง selector หลายแบบสำหรับทั้ง Classic และ Modern UI
+        table_selectors = [
+            "table.list_table",                          # Classic UI
+            "table[role='table']",                       # Modern UI
+            "div[role='grid']",                          # Grid view
+            "table.sn-table",                            # Modern table
+            "div.list-group",                            # List view
+            "sn-list",                                   # Web component
+            "div[class*='list']",                        # Generic list
+            "tbody tr",                                  # Any table rows
+        ]
+
+        for selector in table_selectors:
+            try:
+                print(f"[DEBUG] Trying selector: {selector}")
+                frame.wait_for_selector(selector, timeout=5_000)
+                print(f"[DEBUG] ✓ Found table with selector: {selector}")
+                table_found = True
+                break
+            except Exception:
+                continue
+
+        if not table_found:
+            print(f"[ERROR] Cannot find table with any selector. Current URL: {page.url}")
             print("Taking screenshot for debug...")
             page.screenshot(path="debug_ritm_list_page.png")
             print("\nPossible causes:")
             print("1. Session expired - run: python 01_login_save_state.py")
             print("2. Wrong URL or page structure changed")
             print("3. Page is still loading - check debug_ritm_list_page.png")
-            browser.close()
-            raise
+            print("\n[DEBUG] Attempting to continue anyway...")
+            # Don't raise - try to continue
+        else:
+            print("✓ Table found!")
 
         # ---------- กดปุ่ม "All" เพื่อแสดงทุกรายการ ----------
         try:
