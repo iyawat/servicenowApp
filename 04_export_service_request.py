@@ -187,7 +187,41 @@ def main():
                 print("Clicked control button - waiting for context menu...")
                 page.wait_for_timeout(1000)
 
-                # Step 2: หา context menu item "100 rows per page"
+                # Step 2: หาและคลิก "Show" submenu item
+                show_menu_item = None
+
+                # ลอง selector หลายแบบสำหรับ Show submenu
+                show_selectors = [
+                    'div.context_item[data-context-menu-label="Show"][role="menuitem"]',
+                    'div.context_item[data-context-menu-label="Show"]',
+                    'div.context_item:has-text("Show")[aria-haspopup="true"]',
+                ]
+
+                for sel in show_selectors:
+                    candidate = frame.locator(sel).first
+                    if candidate.count() > 0:
+                        show_menu_item = candidate
+                        print(f"[DEBUG] Found 'Show' menu item with selector: {sel}")
+                        break
+
+                if show_menu_item is None:
+                    # ลองหาใน page context
+                    for sel in show_selectors:
+                        candidate = page.locator(sel).first
+                        if candidate.count() > 0:
+                            show_menu_item = candidate
+                            print(f"[DEBUG] Found 'Show' menu item in page context with selector: {sel}")
+                            break
+
+                if show_menu_item is not None:
+                    print("Clicking 'Show' submenu item...")
+                    show_menu_item.click()
+                    page.wait_for_timeout(1000)
+                    print("Show submenu opened - looking for '100 rows per page'...")
+                else:
+                    print("[WARN] Could not find 'Show' submenu item")
+
+                # Step 3: หา context menu item "100 rows per page"
                 # ลองหาทั้งใน frame และ page context
                 item_100 = frame.locator('div.context_item[item_id="100"][role="menuitem"]').first
                 if item_100.count() == 0:
@@ -222,7 +256,7 @@ def main():
                 # ลองใช้ JavaScript หาและคลิก
                 changed = frame.evaluate("""
                     () => {
-                        // หาปุ่ม control button โดยเฉพาะ
+                        // Step 1: หาปุ่ม control button โดยเฉพาะ
                         let controlBtn = document.querySelector('button#sc_req_item_control_button');
                         if (!controlBtn) {
                             controlBtn = document.querySelector('button[id*="control_button"]');
@@ -241,15 +275,19 @@ def main():
                         if (controlBtn) {
                             controlBtn.click();
 
-                            // รอสักครู่ให้ menu ปรากฏ
+                            // Step 2: คลิก Show submenu item
                             setTimeout(() => {
-                                // หา menu item 100 rows
-                                const menuItems = document.querySelectorAll('div.context_item[role="menuitem"]');
-                                for (const item of menuItems) {
-                                    if (item.getAttribute('item_id') === '100' || item.textContent.includes('100 rows')) {
-                                        item.click();
-                                        return true;
-                                    }
+                                const showSubmenu = document.querySelector('div.context_item[data-context-menu-label="Show"][role="menuitem"]');
+                                if (showSubmenu) {
+                                    showSubmenu.click();
+
+                                    // Step 3: คลิก 100 rows per page
+                                    setTimeout(() => {
+                                        const item100 = document.querySelector('div.context_item[item_id="100"][role="menuitem"]');
+                                        if (item100) {
+                                            item100.click();
+                                        }
+                                    }, 500);
                                 }
                             }, 500);
 
