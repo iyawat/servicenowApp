@@ -154,60 +154,92 @@ def main():
         try:
             print("Setting page size to 100 rows per page...")
 
-            # หาปุ่ม/dropdown สำหรับเปลี่ยน rows per page
-            # ลอง selector หลายแบบ
-            rows_dropdown = None
+            # Step 1: หาและกดปุ่ม "Show" เพื่อเปิด context menu
+            show_button = None
 
-            # ลองหา dropdown ที่มี option 100
-            selectors = [
-                'select[name="sc_req_item_table_per_page"]',
-                'select[aria-label*="Rows per page"]',
-                'select.pagination-select',
-                'select:has(option[value="100"])',
+            # ลอง selector หลายแบบสำหรับปุ่ม Show
+            show_selectors = [
+                'button[aria-label="Show"]',
+                'button:has-text("Show")',
+                'a[aria-label="Show"]',
+                'button.icon-show',
             ]
 
-            for sel in selectors:
+            for sel in show_selectors:
                 candidate = frame.locator(sel).first
                 if candidate.count() > 0:
-                    rows_dropdown = candidate
-                    print(f"[DEBUG] Found rows dropdown with selector: {sel}")
+                    show_button = candidate
+                    print(f"[DEBUG] Found 'Show' button with selector: {sel}")
                     break
 
-            if rows_dropdown is None:
+            if show_button is None:
                 # fallback: ลองหาใน page context
-                for sel in selectors:
+                for sel in show_selectors:
                     candidate = page.locator(sel).first
                     if candidate.count() > 0:
-                        rows_dropdown = candidate
-                        print(f"[DEBUG] Found rows dropdown in page context with selector: {sel}")
+                        show_button = candidate
+                        print(f"[DEBUG] Found 'Show' button in page context with selector: {sel}")
                         break
 
-            if rows_dropdown is not None:
-                # เลือก 100 rows
-                rows_dropdown.select_option(value="100")
-                print("Selected 100 rows per page - waiting for table to reload...")
-                page.wait_for_timeout(3000)
-
-                # Refresh frame reference หลังจาก reload
-                frame = page.frame(name="gsft_main") or page
-
-                # รอให้ตารางโหลดใหม่
-                frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
+            if show_button is not None:
+                # คลิกปุ่ม Show
+                show_button.click()
+                print("Clicked 'Show' button - waiting for context menu...")
                 page.wait_for_timeout(1000)
-                print("Table reloaded with 100 rows per page!")
+
+                # Step 2: หา context menu item "100 rows per page"
+                # ลองหาทั้งใน frame และ page context
+                item_100 = frame.locator('div.context_item[item_id="100"][role="menuitem"]').first
+                if item_100.count() == 0:
+                    item_100 = page.locator('div.context_item[item_id="100"][role="menuitem"]').first
+
+                # fallback: ลองหาด้วย text
+                if item_100.count() == 0:
+                    item_100 = frame.locator('div.context_item:has-text("100 rows per page")').first
+                if item_100.count() == 0:
+                    item_100 = page.locator('div.context_item:has-text("100 rows per page")').first
+
+                if item_100.count() > 0:
+                    print("[DEBUG] Found '100 rows per page' menu item, clicking...")
+                    item_100.click()
+                    print("Selected 100 rows per page - waiting for table to reload...")
+                    page.wait_for_timeout(3000)
+
+                    # Refresh frame reference หลังจาก reload
+                    frame = page.frame(name="gsft_main") or page
+
+                    # รอให้ตารางโหลดใหม่
+                    frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
+                    page.wait_for_timeout(1000)
+                    print("Table reloaded with 100 rows per page!")
+                else:
+                    print("[WARN] Could not find '100 rows per page' menu item")
+                    # ปิด menu ที่เปิดไว้
+                    frame.keyboard.press("Escape")
+                    page.wait_for_timeout(500)
             else:
-                # ลองใช้ JavaScript หาและเปลี่ยน
-                print("[DEBUG] Trying JavaScript to find and change rows per page...")
+                print("[WARN] 'Show' button not found - trying JavaScript approach...")
+                # ลองใช้ JavaScript หาและคลิก
                 changed = frame.evaluate("""
                     () => {
-                        // หา select ที่มี option value="100"
-                        const selects = document.querySelectorAll('select');
-                        for (const select of selects) {
-                            const option100 = select.querySelector('option[value="100"]');
-                            if (option100) {
-                                select.value = '100';
-                                // Trigger change event
-                                select.dispatchEvent(new Event('change', { bubbles: true }));
+                        // หาปุ่ม Show
+                        const showButtons = document.querySelectorAll('button[aria-label="Show"], button');
+                        for (const btn of showButtons) {
+                            if (btn.textContent.includes('Show') || btn.getAttribute('aria-label') === 'Show') {
+                                btn.click();
+
+                                // รอสักครู่ให้ menu ปรากฏ
+                                setTimeout(() => {
+                                    // หา menu item 100 rows
+                                    const menuItems = document.querySelectorAll('div.context_item[role="menuitem"]');
+                                    for (const item of menuItems) {
+                                        if (item.getAttribute('item_id') === '100' || item.textContent.includes('100 rows')) {
+                                            item.click();
+                                            return true;
+                                        }
+                                    }
+                                }, 500);
+
                                 return true;
                             }
                         }
@@ -216,14 +248,14 @@ def main():
                 """)
 
                 if changed:
-                    print("Changed to 100 rows per page via JavaScript - waiting for reload...")
-                    page.wait_for_timeout(3000)
+                    print("Clicked via JavaScript - waiting for reload...")
+                    page.wait_for_timeout(3500)
                     frame = page.frame(name="gsft_main") or page
                     frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
                     page.wait_for_timeout(1000)
                     print("Table reloaded with 100 rows per page!")
                 else:
-                    print("[WARN] Could not find rows per page dropdown - proceeding with default (20 rows)")
+                    print("[WARN] Could not change rows per page - proceeding with default (20 rows)")
 
         except Exception as e:
             print(f"[WARN] Could not change rows per page: {e}")
