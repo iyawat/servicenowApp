@@ -610,32 +610,47 @@ def main():
 
                             # ลอง JavaScript click ก่อน (เพราะปุ่มอาจไม่ visible)
                             try:
-                                # เช็คว่า JavaScript หาปุ่มเจอหรือไม่
-                                btn_found = page.evaluate("""
+                                # ⭐ เช็คว่ามี attachments จริงก่อน download
+                                attachment_count = page.evaluate("""
                                     () => {
-                                        const btn = document.getElementById('download_all_button');
-                                        return btn !== null;
+                                        // หาจำนวน attachments จาก list
+                                        const items = document.querySelectorAll('div.attachment-item, tr.attachment_row, li.attachment-list-item');
+                                        return items.length;
                                     }
                                 """)
+                                print(f"[DEBUG] Found {attachment_count} attachment(s)")
 
-                                if btn_found:
-                                    print("[DEBUG] JavaScript found button, clicking...")
-                                    with page.expect_download() as dl:
-                                        page.evaluate("document.getElementById('download_all_button').click()")
-                                    download_file = dl.value
-                                    wait_download(download_file, attachment_folder / "attachments_all.zip")
-                                    print("Attachments downloaded")
+                                if attachment_count == 0:
+                                    print("[INFO] No attachments to download, skipping...")
                                 else:
-                                    # JavaScript ไม่เจอ ลอง Playwright force click
-                                    print("[DEBUG] JavaScript didn't find button, trying Playwright force click...")
-                                    with page.expect_download() as dl:
-                                        download_all_btn.click(force=True, timeout=10_000)
-                                    download_file = dl.value
-                                    wait_download(download_file, attachment_folder / "attachments_all.zip")
-                                    print("Attachments downloaded")
+                                    # เช็คว่า JavaScript หาปุ่มเจอหรือไม่
+                                    btn_found = page.evaluate("""
+                                        () => {
+                                            const btn = document.getElementById('download_all_button');
+                                            return btn !== null;
+                                        }
+                                    """)
+
+                                    if btn_found:
+                                        print("[DEBUG] JavaScript found button, clicking...")
+                                        # ⭐ เพิ่ม timeout 10 วินาที (ลดจาก 30 วินาที)
+                                        with page.expect_download(timeout=10_000) as dl:
+                                            page.evaluate("document.getElementById('download_all_button').click()")
+                                        download_file = dl.value
+                                        wait_download(download_file, attachment_folder / "attachments_all.zip")
+                                        print("Attachments downloaded")
+                                    else:
+                                        # JavaScript ไม่เจอ ลอง Playwright force click
+                                        print("[DEBUG] JavaScript didn't find button, trying Playwright force click...")
+                                        with page.expect_download(timeout=10_000) as dl:
+                                            download_all_btn.click(force=True, timeout=10_000)
+                                        download_file = dl.value
+                                        wait_download(download_file, attachment_folder / "attachments_all.zip")
+                                        print("Attachments downloaded")
 
                             except Exception as e:
                                 print(f"[WARN] Could not download attachments: {e}")
+                                print("[INFO] This may be normal if there are no attachments or download is blocked")
 
                             # ปิด dialog ด้วยปุ่ม Close
                             print("[DEBUG] Closing Attachments dialog...")
@@ -706,8 +721,13 @@ def main():
                     print("[DEBUG] Waiting for table to reappear...")
                     # รอให้กลับไปหน้า list
                     frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
-                    page.wait_for_timeout(1000)  # รอให้ตารางโหลดเสร็จ
-                    print("[DEBUG] Back to list successfully")
+                    page.wait_for_timeout(2000)  # รอให้ตารางโหลดเสร็จ (เพิ่มเป็น 2 วินาที)
+
+                    # ⭐ IMPORTANT: Re-query rows ใหม่หลัง back to list!
+                    # Rows เก่า reference ไปที่ DOM ที่ detached แล้ว
+                    rows = frame.locator("table.list_table tbody tr, table[role='table'] tbody tr, div[role='row']")
+                    total_rows = rows.count()
+                    print(f"[DEBUG] ✓ Back to list successfully - Re-queried {total_rows} rows")
                 except Exception as e:
                     print(f"[ERROR] Failed to return to list: {e}")
                     print("[ERROR] Browser/page may have been closed. Stopping.")
