@@ -255,15 +255,31 @@ def main():
                     print("[DEBUG] Clicking '100 rows per page' menu item...")
                     item_100.click()
                     print("Selected 100 rows per page - waiting for table to reload...")
-                    page.wait_for_timeout(3000)
+
+                    # รอให้หน้าโหลดเสร็จ
+                    try:
+                        print("[DEBUG] Waiting for page load state...")
+                        page.wait_for_load_state("domcontentloaded", timeout=30_000)
+                        page.wait_for_timeout(2000)
+                        print("[DEBUG] Page load state completed")
+                    except Exception as e:
+                        print(f"[WARN] Wait for load state timeout (continuing anyway): {e}")
 
                     # Refresh frame reference หลังจาก reload
+                    print("[DEBUG] Refreshing frame reference...")
                     frame = page.frame(name="gsft_main") or page
+                    print(f"[DEBUG] Frame reference: {'gsft_main' if page.frame(name='gsft_main') else 'page'}")
 
                     # รอให้ตารางโหลดใหม่
-                    frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
-                    page.wait_for_timeout(1000)
-                    print("Table reloaded with 100 rows per page!")
+                    print("[DEBUG] Waiting for table to appear...")
+                    try:
+                        frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
+                        print("[DEBUG] Table selector found!")
+                        page.wait_for_timeout(1000)
+                        print("✓ Table reloaded with 100 rows per page!")
+                    except Exception as e:
+                        print(f"[ERROR] Failed to find table after reload: {e}")
+                        print("[WARN] Continuing anyway...")
                 else:
                     print("[WARN] Could not find '100 rows per page' menu item")
                     # ปิด menu ที่เปิดไว้
@@ -329,6 +345,16 @@ def main():
             print(f"[WARN] Could not change rows per page: {e}")
             print("Proceeding with default rows per page...")
 
+        # Verify frame is ready before starting export loop
+        print("\n[DEBUG] Verifying frame and table are ready...")
+        try:
+            frame = page.frame(name="gsft_main") or page
+            frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=10_000)
+            print("[DEBUG] ✓ Frame and table are ready!")
+        except Exception as e:
+            print(f"[ERROR] Frame or table not ready: {e}")
+            print("[WARN] Attempting to continue anyway...")
+
         # Loop through all pages until no more next page button
         page_number = 1
 
@@ -339,6 +365,15 @@ def main():
             rows = frame.locator("table.list_table tbody tr, table[role='table'] tbody tr, div[role='row']")
             count = rows.count()
             print(f"Found {count} rows on page {page_number}")
+
+            if count == 0:
+                print("[WARN] No rows found! Frame or table may not be loaded properly.")
+                print("[DEBUG] Retrying frame reference...")
+                frame = page.frame(name="gsft_main") or page
+                page.wait_for_timeout(2000)
+                rows = frame.locator("table.list_table tbody tr, table[role='table'] tbody tr, div[role='row']")
+                count = rows.count()
+                print(f"[DEBUG] After retry: Found {count} rows")
 
             for i in range(count):
                 row = rows.nth(i)
