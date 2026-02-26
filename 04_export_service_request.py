@@ -6,17 +6,14 @@ from playwright.sync_api import sync_playwright
 # BASE = "https://seicthdev.service-now.com"
 
 #PRD
-BASE = "https://seicth.service-now.com/"
+BASE = "https://seicth.service-now.com"
 
 STATE = "state.json"
 OUT = Path("output_ritm")
 DOWNLOADED_LOG = Path("downloaded_ritm.log")  # Log file to track completed downloads
 
-# URL สำหรับ Requested Items list
-RITM_LIST_URL = (
-    f"{BASE}/now/nav/ui/classic/params/target/"
-    "sc_req_item_list.do%3Fsysparm_query%3Dactive%253Dtrue%255EEQ"
-)
+# URL สำหรับ Requested Items list (แก้ double-encoding และ duplicate slash)
+RITM_LIST_URL = f"{BASE}/sc_req_item_list.do?sysparm_query=active=true^EQ"
 
 def safe_name(s: str) -> str:
     s = s.strip()

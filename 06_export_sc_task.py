@@ -6,16 +6,18 @@ from playwright.sync_api import sync_playwright
 # BASE = "https://seicthdev.service-now.com"
 
 #PRD
-BASE = "https://seicth.service-now.com/"
+BASE = "https://seicth.service-now.com"
 
 STATE = "state.json"
 OUT = Path("output_sctask")
 DOWNLOADED_LOG = Path("downloaded_sctask.log")  # Log file to track completed downloads
 
-# URL สำหรับ SC Task list
+# URL สำหรับ SC Task list (แก้ double-encoding และ duplicate slash)
 SCTASK_LIST_URL = (
-    f"{BASE}/now/nav/ui/classic/params/target/"
-    "sc_task_list.do%3Fsysparm_userpref_module%3D59f8a2a60a0a0b9b00fd6bfe2e28ada5%26sysparm_query%3Dactive%253Dtrue%255EEQ%26sysparm_clear_stack%3Dtrue%26sysparm_clear_stack%3Dtrue"
+    f"{BASE}/sc_task_list.do?"
+    "sysparm_userpref_module=59f8a2a60a0a0b9b00fd6bfe2e28ada5"
+    "&sysparm_query=active=true^EQ"
+    "&sysparm_clear_stack=true"
 )
 
 def safe_name(s: str) -> str:
