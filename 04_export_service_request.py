@@ -150,6 +150,85 @@ def main():
             print(f"[WARN] Could not click 'All' filter: {e}")
             print("Proceeding with current view...")
 
+        # ---------- เปลี่ยนเป็น 100 rows per page ----------
+        try:
+            print("Setting page size to 100 rows per page...")
+
+            # หาปุ่ม/dropdown สำหรับเปลี่ยน rows per page
+            # ลอง selector หลายแบบ
+            rows_dropdown = None
+
+            # ลองหา dropdown ที่มี option 100
+            selectors = [
+                'select[name="sc_req_item_table_per_page"]',
+                'select[aria-label*="Rows per page"]',
+                'select.pagination-select',
+                'select:has(option[value="100"])',
+            ]
+
+            for sel in selectors:
+                candidate = frame.locator(sel).first
+                if candidate.count() > 0:
+                    rows_dropdown = candidate
+                    print(f"[DEBUG] Found rows dropdown with selector: {sel}")
+                    break
+
+            if rows_dropdown is None:
+                # fallback: ลองหาใน page context
+                for sel in selectors:
+                    candidate = page.locator(sel).first
+                    if candidate.count() > 0:
+                        rows_dropdown = candidate
+                        print(f"[DEBUG] Found rows dropdown in page context with selector: {sel}")
+                        break
+
+            if rows_dropdown is not None:
+                # เลือก 100 rows
+                rows_dropdown.select_option(value="100")
+                print("Selected 100 rows per page - waiting for table to reload...")
+                page.wait_for_timeout(3000)
+
+                # Refresh frame reference หลังจาก reload
+                frame = page.frame(name="gsft_main") or page
+
+                # รอให้ตารางโหลดใหม่
+                frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
+                page.wait_for_timeout(1000)
+                print("Table reloaded with 100 rows per page!")
+            else:
+                # ลองใช้ JavaScript หาและเปลี่ยน
+                print("[DEBUG] Trying JavaScript to find and change rows per page...")
+                changed = frame.evaluate("""
+                    () => {
+                        // หา select ที่มี option value="100"
+                        const selects = document.querySelectorAll('select');
+                        for (const select of selects) {
+                            const option100 = select.querySelector('option[value="100"]');
+                            if (option100) {
+                                select.value = '100';
+                                // Trigger change event
+                                select.dispatchEvent(new Event('change', { bubbles: true }));
+                                return true;
+                            }
+                        }
+                        return false;
+                    }
+                """)
+
+                if changed:
+                    print("Changed to 100 rows per page via JavaScript - waiting for reload...")
+                    page.wait_for_timeout(3000)
+                    frame = page.frame(name="gsft_main") or page
+                    frame.wait_for_selector("table.list_table, table[role='table'], div[role='grid']", timeout=60_000)
+                    page.wait_for_timeout(1000)
+                    print("Table reloaded with 100 rows per page!")
+                else:
+                    print("[WARN] Could not find rows per page dropdown - proceeding with default (20 rows)")
+
+        except Exception as e:
+            print(f"[WARN] Could not change rows per page: {e}")
+            print("Proceeding with default rows per page...")
+
         # Loop through all pages until no more next page button
         page_number = 1
 
