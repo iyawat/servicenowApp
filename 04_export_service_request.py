@@ -154,37 +154,37 @@ def main():
         try:
             print("Setting page size to 100 rows per page...")
 
-            # Step 1: หาและกดปุ่ม "Show" เพื่อเปิด context menu
-            show_button = None
+            # Step 1: หาและกดปุ่ม menu icon control button
+            control_button = None
 
-            # ลอง selector หลายแบบสำหรับปุ่ม Show
-            show_selectors = [
+            # ลอง selector หลายแบบสำหรับปุ่ม control (Show menu)
+            control_selectors = [
+                'button#sc_req_item_control_button',
+                'button[id*="control_button"]',
                 'button[aria-label="Show"]',
                 'button:has-text("Show")',
-                'a[aria-label="Show"]',
-                'button.icon-show',
             ]
 
-            for sel in show_selectors:
+            for sel in control_selectors:
                 candidate = frame.locator(sel).first
                 if candidate.count() > 0:
-                    show_button = candidate
-                    print(f"[DEBUG] Found 'Show' button with selector: {sel}")
+                    control_button = candidate
+                    print(f"[DEBUG] Found control button with selector: {sel}")
                     break
 
-            if show_button is None:
+            if control_button is None:
                 # fallback: ลองหาใน page context
-                for sel in show_selectors:
+                for sel in control_selectors:
                     candidate = page.locator(sel).first
                     if candidate.count() > 0:
-                        show_button = candidate
-                        print(f"[DEBUG] Found 'Show' button in page context with selector: {sel}")
+                        control_button = candidate
+                        print(f"[DEBUG] Found control button in page context with selector: {sel}")
                         break
 
-            if show_button is not None:
-                # คลิกปุ่ม Show
-                show_button.click()
-                print("Clicked 'Show' button - waiting for context menu...")
+            if control_button is not None:
+                # คลิกปุ่ม control
+                control_button.click()
+                print("Clicked control button - waiting for context menu...")
                 page.wait_for_timeout(1000)
 
                 # Step 2: หา context menu item "100 rows per page"
@@ -218,30 +218,42 @@ def main():
                     frame.keyboard.press("Escape")
                     page.wait_for_timeout(500)
             else:
-                print("[WARN] 'Show' button not found - trying JavaScript approach...")
+                print("[WARN] Control button not found - trying JavaScript approach...")
                 # ลองใช้ JavaScript หาและคลิก
                 changed = frame.evaluate("""
                     () => {
-                        // หาปุ่ม Show
-                        const showButtons = document.querySelectorAll('button[aria-label="Show"], button');
-                        for (const btn of showButtons) {
-                            if (btn.textContent.includes('Show') || btn.getAttribute('aria-label') === 'Show') {
-                                btn.click();
-
-                                // รอสักครู่ให้ menu ปรากฏ
-                                setTimeout(() => {
-                                    // หา menu item 100 rows
-                                    const menuItems = document.querySelectorAll('div.context_item[role="menuitem"]');
-                                    for (const item of menuItems) {
-                                        if (item.getAttribute('item_id') === '100' || item.textContent.includes('100 rows')) {
-                                            item.click();
-                                            return true;
-                                        }
-                                    }
-                                }, 500);
-
-                                return true;
+                        // หาปุ่ม control button โดยเฉพาะ
+                        let controlBtn = document.querySelector('button#sc_req_item_control_button');
+                        if (!controlBtn) {
+                            controlBtn = document.querySelector('button[id*="control_button"]');
+                        }
+                        if (!controlBtn) {
+                            // fallback: หาปุ่ม Show
+                            const showButtons = document.querySelectorAll('button[aria-label="Show"], button');
+                            for (const btn of showButtons) {
+                                if (btn.textContent.includes('Show') || btn.getAttribute('aria-label') === 'Show') {
+                                    controlBtn = btn;
+                                    break;
+                                }
                             }
+                        }
+
+                        if (controlBtn) {
+                            controlBtn.click();
+
+                            // รอสักครู่ให้ menu ปรากฏ
+                            setTimeout(() => {
+                                // หา menu item 100 rows
+                                const menuItems = document.querySelectorAll('div.context_item[role="menuitem"]');
+                                for (const item of menuItems) {
+                                    if (item.getAttribute('item_id') === '100' || item.textContent.includes('100 rows')) {
+                                        item.click();
+                                        return true;
+                                    }
+                                }
+                            }, 500);
+
+                            return true;
                         }
                         return false;
                     }
