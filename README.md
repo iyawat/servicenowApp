@@ -17,8 +17,14 @@ python3 -m playwright install
 4. รัน Export Service Request Script (RITM)
    python3 04_export_service_request.py
 
-5. รัน Report Script (สำหรับ Change Request - CHG)
+5. รัน Export SC Task Script (SCTASK)
+   python3 06_export_sc_task.py
+
+6. รัน Report Script (สำหรับ Change Request - CHG)
    python3 03_check_file.py
 
-6. รัน Report Script (สำหรับ Requested Items - RITM)
+7. รัน Report Script (สำหรับ Requested Items - RITM)
    python3 05_check_ritm_file.py
+
+8. รัน Report Script (สำหรับ SC Task - SCTASK)
+   python3 07_check_sctask_file.py
