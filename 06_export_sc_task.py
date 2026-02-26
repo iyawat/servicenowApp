@@ -216,25 +216,43 @@ def main():
                 if show_menu_item is not None:
                     print("Clicking 'Show' submenu item...")
                     show_menu_item.click()
-                    page.wait_for_timeout(1000)
-                    print("Show submenu opened - looking for '100 rows per page'...")
+                    print("Show submenu clicked - waiting for submenu to appear...")
+                    page.wait_for_timeout(2000)
+                    print("Looking for '100 rows per page'...")
                 else:
                     print("[WARN] Could not find 'Show' submenu item")
 
                 # Step 3: หา context menu item "100 rows per page"
-                # ลองหาทั้งใน frame และ page context
-                item_100 = frame.locator('div.context_item[item_id="100"][role="menuitem"]').first
-                if item_100.count() == 0:
-                    item_100 = page.locator('div.context_item[item_id="100"][role="menuitem"]').first
+                # ลอง selector หลายแบบ โดยลองใน page context ก่อน (submenu มักจะ render ที่ page level)
+                item_100 = None
 
-                # fallback: ลองหาด้วย text
-                if item_100.count() == 0:
-                    item_100 = frame.locator('div.context_item:has-text("100 rows per page")').first
-                if item_100.count() == 0:
-                    item_100 = page.locator('div.context_item:has-text("100 rows per page")').first
+                # ลอง selector หลายแบบ
+                selectors_100 = [
+                    'div.context_item[item_id="100"][role="menuitem"]',
+                    'div.context_item[item_id="100"]',
+                    'div.context_item[func_set="true"]:has-text("100 rows per page")',
+                    'div.context_item:has-text("100 rows per page")',
+                ]
 
-                if item_100.count() > 0:
-                    print("[DEBUG] Found '100 rows per page' menu item, clicking...")
+                # ลองหาใน page context ก่อน
+                for sel in selectors_100:
+                    candidate = page.locator(sel).first
+                    if candidate.count() > 0:
+                        item_100 = candidate
+                        print(f"[DEBUG] Found '100 rows per page' in page context with selector: {sel}")
+                        break
+
+                # ถ้าไม่เจอใน page context ลองใน frame
+                if item_100 is None:
+                    for sel in selectors_100:
+                        candidate = frame.locator(sel).first
+                        if candidate.count() > 0:
+                            item_100 = candidate
+                            print(f"[DEBUG] Found '100 rows per page' in frame context with selector: {sel}")
+                            break
+
+                if item_100 is not None and item_100.count() > 0:
+                    print("[DEBUG] Clicking '100 rows per page' menu item...")
                     item_100.click()
                     print("Selected 100 rows per page - waiting for table to reload...")
                     page.wait_for_timeout(3000)
